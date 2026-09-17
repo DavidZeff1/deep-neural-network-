@@ -39,6 +39,10 @@ function columnLatex(values: number[], digits = 2): string {
   return matrixLatex(values.map((v) => [v]), digits);
 }
 
+/** A column of question marks, shown for results the reader has not stepped to yet. */
+const PLACEHOLDER_COLUMN = (rows: number): string =>
+  `\\begin{bmatrix} ${Array.from({ length: rows }, () => '?').join(' \\\\ ')} \\end{bmatrix}`;
+
 export function ForwardSection({ id, index }: SectionProps) {
   const [hiddenActivation, setHiddenActivation] = useState<ActivationName>('relu');
   const config = useMemo<NetworkConfig>(
@@ -231,7 +235,8 @@ export function ForwardSection({ id, index }: SectionProps) {
                 </div>
                 <div className="calc__line">
                   <span className="calc__label">+ bias      </span>
-                  {fmt(outZ - outB, 4)} + {fmt(outB, 3)} = {fmt(outZ, 4)}
+                  {fmt(outZ - outB, 4)} + {fmt(outB, 3)} ={' '}
+                  <span className="calc__result">{fmt(outZ, 4)}</span>
                 </div>
                 <div className="calc__line">
                   <span className="calc__label">activation  </span>
@@ -255,12 +260,14 @@ export function ForwardSection({ id, index }: SectionProps) {
                   ({fmt(wRow[0], 2)})({fmt(x[0], 2)}) + ({fmt(wRow[1], 2)})({fmt(x[1], 2)})
                 </div>
                 <div className="calc__line">
-                  <span className="calc__label">            </span>= {fmt(wRow[0] * x[0], 4)} + {fmt(wRow[1] * x[1], 4)} ={' '}
-                  {fmt(zValue - bValue, 4)}
+                  <span className="calc__label">            </span>={' '}
+                  {step >= 1
+                    ? `${fmt(wRow[0] * x[0], 4)} + ${fmt(wRow[1] * x[1], 4)} = ${fmt(zValue - bValue, 4)}`
+                    : '…'}
                 </div>
                 <div className="calc__line">
                   <span className="calc__label">+ bias      </span>
-                  {fmt(zValue - bValue, 4)} + {fmt(bValue, 3)} ={' '}
+                  {step >= 1 ? `${fmt(zValue - bValue, 4)} + ${fmt(bValue, 3)} = ` : `${fmt(bValue, 3)} → `}
                   <span className={step >= 1 ? 'calc__result' : ''}>{step >= 1 ? fmt(zValue, 4) : '…'}</span>
                 </div>
                 <div className="calc__line">
@@ -293,15 +300,18 @@ export function ForwardSection({ id, index }: SectionProps) {
         </Panel>
 
         <div className="stack">
-          <Panel title="The same step in matrix form">
+          <Panel title="The same step in matrix form" hint="fills in as you step">
             <Equation plain>
-              {`\\mathbf{z}^{(1)} = ${matrixLatex(network.W[0], 2)} ${columnLatex(x, 2)} + ${columnLatex(network.b[0], 2)} = ${columnLatex(trace.layers[0].z, 3)}`}
+              {`\\mathbf{z}^{(1)} = ${matrixLatex(network.W[0], 2)} ${columnLatex(x, 2)} + ${columnLatex(network.b[0], 2)} = ${step >= 1 ? columnLatex(trace.layers[0].z, 3) : PLACEHOLDER_COLUMN(3)}`}
             </Equation>
             <Equation plain>
-              {`\\mathbf{a}^{(1)} = f\\!\\left(\\mathbf{z}^{(1)}\\right) = ${columnLatex(trace.layers[0].a, 3)}`}
+              {`\\mathbf{a}^{(1)} = f\\!\\left(\\mathbf{z}^{(1)}\\right) = ${step >= 2 ? columnLatex(trace.layers[0].a, 3) : PLACEHOLDER_COLUMN(3)}`}
             </Equation>
             <Equation plain>
-              {`\\hat{y} = \\sigma\\!\\left(${matrixLatex([outW], 2)} ${columnLatex(trace.layers[0].a, 3)} + ${fmt(outB, 2).replace('−', '-')}\\right) = ${fmt(yHat, 4).replace('−', '-')}`}
+              {`z^{(2)} = ${matrixLatex([outW], 2)}\\,\\mathbf{a}^{(1)} + ${fmt(outB, 2).replace('−', '-')} = ${step >= 3 ? fmt(outZ, 4).replace('−', '-') : '\\;?\\;'}`}
+            </Equation>
+            <Equation plain>
+              {`\\hat{y} = \\sigma\\!\\left(z^{(2)}\\right) = ${step >= 4 ? fmt(yHat, 4).replace('−', '-') : '\\;?\\;'}`}
             </Equation>
           </Panel>
 
