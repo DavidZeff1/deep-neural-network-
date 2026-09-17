@@ -5,6 +5,11 @@ network: weights are initialised, forward passes are computed, gradients are
 derived by backpropagation and training runs in the browser. There are no
 pre-recorded animations and no placeholder controls.
 
+Each section pairs an interactive figure with the mathematics behind it. The
+one-paragraph statement is always visible; the full derivation sits in a
+collapsible block next to it, so nothing is asserted without proof and the page
+still reads as a sequence of experiments rather than a textbook.
+
 ![Twelve sections, from network structure to a full playground](docs/overview.png)
 
 ## Contents
@@ -13,11 +18,11 @@ pre-recorded animations and no placeholder controls.
 |---|---------|--------------|
 | 01 | Network structure | Reshape an architecture and watch the layer shapes and parameter count follow |
 | 02 | Neurons | One neuron, two inputs; the weighted sum, the bias and the line `z = 0` in the input plane |
-| 03 | Weights & biases | Edit any entry of `W` or `b` from the diagram or the matrix and see the forward pass change |
-| 04 | Activation functions | ReLU, sigmoid, tanh, leaky ReLU with their derivatives; softmax over adjustable logits |
+| 03 | Weights & biases | Edit any entry of `W` or `b`; measure how activation and gradient scale compound over 10 layers as the initialisation gain changes |
+| 04 | Activation functions | ReLU, sigmoid, tanh, leaky ReLU with their derivatives; softmax over adjustable logits with a temperature control |
 | 05 | Forward propagation | Step through `z⁽¹⁾ → a⁽¹⁾ → z⁽²⁾ → ŷ` with the real numbers and the matrix form side by side |
 | 06 | Loss functions | MSE, binary cross-entropy and categorical cross-entropy as functions of the prediction |
-| 07 | Gradient descent | `θ ← θ − η ∇L(θ)` on four 1-D landscapes and on a 2-D least-squares surface |
+| 07 | Gradient descent | `θ ← θ − η ∇L(θ)` on four 1-D landscapes and on a 2-D least-squares surface, with momentum and an adjustable condition number |
 | 08 | Backpropagation | Step the backward pass, expand the chain rule for any weight, verify it against finite differences |
 | 09 | Training | Mini-batch training on five datasets with a live decision boundary and metric curves |
 | 10 | Overfitting & regularisation | Train/validation split, L2, dropout and early stopping |
@@ -38,8 +43,8 @@ The built site is static and has no network dependencies at runtime.
 ## Tests
 
 ```bash
-npm test             # numerical correctness of the network engine
-npm run test:browser # every interactive control, against a running preview server
+npm test             # numerical correctness of the network engine — 24 tests
+npm run test:browser # every interactive control — 87 checks, needs a preview server
 ```
 
 `npm test` is the important one. It gradient-checks backpropagation against
@@ -47,17 +52,20 @@ central finite differences for every combination of hidden activation
 (`relu`, `leakyRelu`, `sigmoid`, `tanh`), output head (`sigmoid`, `softmax`,
 `linear`) and loss (`mse`, `bce`, `cce`), for networks with zero, one, two and
 four hidden layers, and requires a relative error below `1e-5`. It also checks
-the softmax Jacobian, the loss derivatives, the update rule, dataset balance and
-reproducibility, and that a network with no hidden layer fails on XOR while
-solving a linearly separable set.
+the softmax Jacobian, the loss derivatives, the update rule, momentum, the
+`2/λ_max` stability bound, that feature scaling changes the condition number
+without changing the fit, dataset balance and reproducibility, and that a network
+with no hidden layer fails on XOR while solving a linearly separable set.
 
 `npm run test:browser` needs a preview server on port 4173 and Playwright's
-Chromium. It drives 73 checks across all twelve sections — sliders, buttons,
+Chromium. It drives 87 checks across all twelve sections — sliders, buttons,
 selects, canvas clicks, training runs, navigation, theme switching and mobile
-layout — and asserts on the values the page displays (for example that
-`BCE(0.8, y=1)` reads `0.2231`, that one descent step equals `θ − η∇L`, and that
-the on-screen chain-rule product equals the value backpropagation produced).
-Set `CHROMIUM_PATH` to use a system Chromium instead of a downloaded one.
+layout — and asserts on the values the page displays: that `BCE(0.8, y=1)` reads
+`0.2231`, that one descent step equals `θ − η∇L`, that the on-screen chain-rule
+product equals the value backpropagation produced, that softmax with logits of
+102/101/100.1 returns the same probabilities as 2/1/0.1 rather than NaN, and that
+a gain of 0.7 makes activations vanish over ten layers while 1.41 keeps them
+flat. Set `CHROMIUM_PATH` to use a system Chromium instead of a downloaded one.
 
 ## Layout
 
@@ -67,7 +75,7 @@ src/
     activations.ts     f(z) and f'(z) for each activation; softmax and its Jacobian
     losses.ts          MSE, BCE, CCE with their derivatives
     network.ts         the MLP: forward, backward, mini-batch training, L2, dropout
-    optimisation.ts    1-D loss landscapes and least-squares gradient descent
+    optimisation.ts    1-D loss landscapes, least-squares descent, momentum, curvature
     datasets.ts        linear, XOR, circles, moons, spiral
     contour.ts         marching squares, used for decision boundaries and contours
     rng.ts             seeded RNG so every figure is reproducible
@@ -109,6 +117,17 @@ resetting the weights.
 frame, with the learning rate and batch size read from refs so they take effect
 immediately. Reported losses are recomputed on the full set after each epoch with
 dropout disabled.
+
+**Momentum.** The heavy-ball form `v ← βv + ∇L`, `θ ← θ − ηv`, which reduces to
+plain gradient descent at `β = 0`. Used in the gradient-descent section only; the
+training sections use plain mini-batch SGD so that what you see is the rule the
+earlier sections derived.
+
+**Conditioning.** The least-squares Hessian is constant, so its eigenvalues are
+computed in closed form and reported live. A feature-scale control multiplies the
+input values, which stretches one axis of the loss surface and raises the
+condition number from about 1.5 to about 32 without changing the fitted line —
+the same effect unnormalised inputs have on a real objective.
 
 **Decision boundaries.** The output is swept over a grid, drawn as a raster, and
 the `p = 0.5` level set is extracted with marching squares so the boundary is a

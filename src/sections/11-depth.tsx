@@ -11,6 +11,7 @@ import type { EnsembleMember } from '../hooks/useEnsembleTrainer.ts';
 import { DecisionBoundary } from '../components/viz/DecisionBoundary.tsx';
 import { MetricChart } from '../components/viz/MetricChart.tsx';
 import { Panel, Note, Stats } from '../components/ui/layout.tsx';
+import { Detail } from '../components/ui/Detail.tsx';
 import { Button, SelectField, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { fmt, fmtPercent } from '../lib/format.ts';
@@ -249,6 +250,73 @@ export function DepthSection({ id, index }: SectionProps) {
             multiplies the region count rather than adding to it. The growth becomes exponential in
             depth and polynomial in width.
           </p>
+
+          <Detail kicker="derivation" title="Counting the regions of one hidden layer">
+            <p>
+              Each unit's boundary is a hyperplane in <M>{'\\mathbb{R}^{d}'}</M>. The question is
+              how many pieces <M>{'n'}</M> hyperplanes in general position cut the space into. Let{' '}
+              <M>{'r(n, d)'}</M> be that number.
+            </p>
+            <p>
+              Add the <M>{'n'}</M>-th hyperplane to an arrangement of{' '}
+              <M>{'n-1'}</M>. It intersects each existing region it passes through and splits it in
+              two, so the increase equals the number of regions it meets. Those regions correspond
+              exactly to the regions that the other <M>{'n-1'}</M> hyperplanes cut the new
+              hyperplane into — and the new hyperplane is itself a space of dimension{' '}
+              <M>{'d-1'}</M>. So
+            </p>
+            <Equation plain>{'r(n, d) = r(n-1, d) + r(n-1, d-1)'}</Equation>
+            <p>
+              With the base cases <M>{'r(0,d) = 1'}</M> and{' '}
+              <M>{'r(n,0) = 1'}</M>, this recursion has the closed-form solution
+            </p>
+            <Equation plain>{'r(n, d) = \\sum_{j=0}^{d} \\binom{n}{j}'}</Equation>
+            <p>
+              which can be checked by Pascal's rule{' '}
+              <M>{'\\binom{n}{j} = \\binom{n-1}{j} + \\binom{n-1}{j-1}'}</M>. For{' '}
+              <M>{'d = 2'}</M> this is{' '}
+              <M>{'1 + n + \\binom{n}{2}'}</M>: two lines give 4 regions, three give 7, eight give
+              37 — the number in the first row of the table below.
+            </p>
+            <p>
+              The count is <M>{'\\Theta(n^{d})'}</M> for fixed <M>{'d'}</M> — polynomial in the
+              width. Since a one-hidden-layer network of width{' '}
+              <M>{'n'}</M> has about <M>{'n(d+2)'}</M> parameters, the regions grow only
+              polynomially in the parameter count.
+            </p>
+          </Detail>
+
+          <Detail title="Why a second layer multiplies rather than adds">
+            <p>
+              Consider a single ReLU unit in one dimension with{' '}
+              <M>{'a = |z|'}</M> — achievable as the sum of two ReLUs,{' '}
+              <M>{'\\max(0,z) + \\max(0,-z)'}</M>. This map is two-to-one: the points{' '}
+              <M>{'z'}</M> and <M>{'-z'}</M> are sent to the same output. Anything the next layer
+              computes downstream is therefore applied identically to both, so whatever pattern the
+              next layer draws in its input space appears <em>twice</em> in the original input
+              space, mirrored.
+            </p>
+            <p>
+              A layer of <M>{'n'}</M> such units in <M>{'d'}</M> dimensions can fold the space along{' '}
+              <M>{'\\lfloor n/d \\rfloor'}</M> independent directions per dimension, giving up to{' '}
+              <M>{'\\lfloor n/d\\rfloor^{d}'}</M> copies of the downstream pattern. Each
+              additional layer applies the same factor to whatever has already been built:
+            </p>
+            <Equation plain>
+              {'\\#\\text{regions} \\;\\ge\\; \\left\\lfloor \\frac{n}{d}\\right\\rfloor^{d(L-1)} \\sum_{j=0}^{d}\\binom{n}{j}'}
+            </Equation>
+            <p>
+              The base is the single-layer count and the prefactor is the compounding from depth.
+              Parameters, by contrast, grow linearly in <M>{'L'}</M>: about{' '}
+              <M>{'(L-1)n^2'}</M> of them. So the same budget of parameters buys polynomially many
+              regions when spent on width and exponentially many when spent on depth.
+            </p>
+            <p>
+              The table below evaluates both expressions. At <M>{'n = 8'}</M>, going from one hidden
+              layer to four multiplies the parameters by about 7.5 and the region bound by about
+              4000.
+            </p>
+          </Detail>
         </div>
       </div>
 
@@ -299,23 +367,55 @@ export function DepthSection({ id, index }: SectionProps) {
         <div className="prose-block">
           <h3 className="subhead">What depth does not give you</h3>
           <p>
-            The universal approximation theorem states that one hidden layer with enough units can
-            approximate any continuous function on a compact set to arbitrary accuracy. Depth is
-            therefore not about what is representable in principle — it is about how many units are
-            required.
+            The universal approximation theorem is precise and worth stating exactly, because it is
+            often quoted loosely. For any continuous <M>{'h'}</M> on a compact set{' '}
+            <M>{'K \\subset \\mathbb{R}^{d}'}</M>, any non-polynomial activation{' '}
+            <M>{'f'}</M>, and any <M>{'\\epsilon > 0'}</M>, there exists a width{' '}
+            <M>{'n'}</M> and parameters such that the one-hidden-layer network{' '}
+            <M>{'\\hat{h}'}</M> satisfies{' '}
+            <M>{'\\sup_{\\mathbf{x}\\in K}|h(\\mathbf{x}) - \\hat{h}(\\mathbf{x})| < \\epsilon'}</M>.
           </p>
           <p>
-            For some function families the gap is exponential: a function computable by a deep
-            network of width <M>{'n'}</M> and depth <M>{'L'}</M> can require width exponential in{' '}
-            <M>{'L'}</M> to compute with a single hidden layer. Depth buys parameter efficiency, not
-            new expressive limits.
+            Note what it does not say. It gives no bound on <M>{'n'}</M> — which can be exponential
+            in <M>{'d'}</M> and in <M>{'1/\\epsilon'}</M>. It says nothing about whether gradient
+            descent can find those parameters. And it says nothing about generalisation: it is a
+            statement about fitting a known function on a compact set, not about learning one from
+            samples.
           </p>
           <p>
-            Depth also costs something. Each additional layer adds a factor of{' '}
-            <M>{"f'(z)"}</M> and <M>{'W^{\\top}'}</M> to the backward product, so gradients decay or
-            explode more easily. Set the activation above to sigmoid and train: the three-layer
-            network now learns more slowly than the one-layer network, despite being strictly more
-            expressive.
+            So depth is not about what is representable in principle — it is about how many units are
+            required, and how findable the parameters are. Depth-separation results make the first
+            part concrete: there are functions computable exactly by a network of depth{' '}
+            <M>{'L'}</M> and polynomial width that require width exponential in{' '}
+            <M>{'L'}</M> to approximate with depth <M>{'L-1'}</M>.
+          </p>
+
+          <h3 className="subhead">What depth costs</h3>
+          <ul>
+            <li>
+              <strong>Gradient conditioning.</strong> Each layer adds a factor of{' '}
+              <M>{"f'(z)"}</M> and <M>{'W^{\\top}'}</M> to the backward product, as section 08
+              derived. Deeper means more factors and a product further from 1.
+            </li>
+            <li>
+              <strong>Optimisation difficulty.</strong> More layers means a more composed, less
+              well-conditioned surface, so the effective condition number of section 07 rises.
+            </li>
+            <li>
+              <strong>Memory.</strong> Activations from every layer are held for the backward pass,
+              so memory grows linearly in depth at fixed width.
+            </li>
+            <li>
+              <strong>Latency.</strong> Layers are sequential. Width parallelises across units;
+              depth does not.
+            </li>
+          </ul>
+          <p>
+            Set the activation above to sigmoid and train. The three-layer network now learns more
+            slowly than the one-layer network despite being strictly more expressive — the gradient
+            factor <M>{"\\sigma' \\le 0.25"}</M> costs more than the extra capacity gains. The
+            techniques that made very deep networks practical — ReLU, careful initialisation,
+            normalisation, residual connections — all address this list rather than expressiveness.
           </p>
         </div>
       </div>

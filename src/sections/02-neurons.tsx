@@ -5,6 +5,7 @@ import { ACTIVATIONS, HIDDEN_ACTIVATIONS } from '../lib/activations.ts';
 import type { ActivationName } from '../lib/activations.ts';
 import { fmt, clamp } from '../lib/format.ts';
 import { Panel, Note, Stats } from '../components/ui/layout.tsx';
+import { Detail } from '../components/ui/Detail.tsx';
 import { Segmented, Slider, Button } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { DecisionBoundary } from '../components/viz/DecisionBoundary.tsx';
@@ -284,6 +285,106 @@ export function NeuronsSection({ id, index }: SectionProps) {
             Set <M>{'w_1 = 1'}</M>, <M>{'w_2 = 1'}</M>, <M>{'b = 0'}</M> and the line is the
             anti-diagonal. Increase <M>{'b'}</M> and it slides towards the lower left. This is the
             entire expressive power of a single unit, and the reason networks stack many of them.
+          </p>
+
+          <h3 className="subhead">z measures distance, scaled by ‖w‖</h3>
+          <p>
+            The pre-activation is not an arbitrary number: it is the signed distance from{' '}
+            <M>{'\\mathbf{x}'}</M> to the boundary, multiplied by{' '}
+            <M>{'\\lVert \\mathbf{w} \\rVert'}</M>.
+          </p>
+          <Equation caption="d is positive on the side the weight vector points towards, negative on the other.">
+            {'z(\\mathbf{x}) = \\lVert \\mathbf{w} \\rVert \\cdot d(\\mathbf{x}), \\qquad d(\\mathbf{x}) = \\frac{\\mathbf{w}\\cdot\\mathbf{x} + b}{\\lVert \\mathbf{w} \\rVert}'}
+          </Equation>
+          <p>
+            Two consequences follow. Scaling <M>{'\\mathbf{w}'}</M> and <M>{'b'}</M> by the same
+            positive constant leaves the boundary fixed but multiplies every <M>{'z'}</M> by that
+            constant — so the direction of <M>{'\\mathbf{w}'}</M> sets <em>where</em> the
+            boundary is, and its magnitude sets <em>how sharply</em> the activation switches across
+            it. And the boundary's distance from the origin is{' '}
+            <M>{'|b| / \\lVert \\mathbf{w} \\rVert'}</M>, which is why a large bias relative to
+            the weights pushes the boundary out of the region where the data lives.
+          </p>
+
+          <Detail title="z as a scaled distance">
+            <p>
+              Let <M>{'\\mathbf{x}_0'}</M> be any point on the boundary, so{' '}
+              <M>{'\\mathbf{w}\\cdot\\mathbf{x}_0 + b = 0'}</M>. For an arbitrary{' '}
+              <M>{'\\mathbf{x}'}</M>, decompose the displacement into a component along the unit
+              normal <M>{'\\hat{\\mathbf{n}} = \\mathbf{w}/\\lVert\\mathbf{w}\\rVert'}</M>{' '}
+              and a component in the boundary:
+            </p>
+            <Equation plain>
+              {'\\mathbf{x} - \\mathbf{x}_0 = d\\,\\hat{\\mathbf{n}} + \\mathbf{t}, \\qquad \\mathbf{w}\\cdot\\mathbf{t} = 0'}
+            </Equation>
+            <p>Taking the inner product with <M>{'\\mathbf{w}'}</M>:</p>
+            <Equation plain>
+              {'\\mathbf{w}\\cdot\\mathbf{x} - \\mathbf{w}\\cdot\\mathbf{x}_0 = d\\,\\lVert\\mathbf{w}\\rVert'}
+            </Equation>
+            <p>
+              Substituting <M>{'\\mathbf{w}\\cdot\\mathbf{x}_0 = -b'}</M> gives{' '}
+              <M>{'\\mathbf{w}\\cdot\\mathbf{x} + b = d\\,\\lVert\\mathbf{w}\\rVert'}</M>,
+              which is <M>{'z = \\lVert\\mathbf{w}\\rVert\\, d'}</M>. Setting{' '}
+              <M>{'\\mathbf{x} = \\mathbf{0}'}</M> gives the distance from the origin to the
+              boundary as <M>{'|b|/\\lVert\\mathbf{w}\\rVert'}</M>.
+            </p>
+            <p>
+              Check it with the worked example: <M>{'\\mathbf{w} = (0.8, -0.3)'}</M>,{' '}
+              <M>{'b = 0.2'}</M>, so <M>{'\\lVert\\mathbf{w}\\rVert = 0.854'}</M>. At{' '}
+              <M>{'\\mathbf{x} = (1.0, 0.5)'}</M> we found <M>{'z = 0.85'}</M>, so the point sits{' '}
+              <M>{'0.85/0.854 = 0.995'}</M> units from the boundary, on the positive side. The
+              boundary itself passes <M>{'0.2/0.854 = 0.234'}</M> units from the origin.
+            </p>
+          </Detail>
+
+          <h3 className="subhead">What one neuron cannot do</h3>
+          <p>
+            Because the level sets of <M>{'z'}</M> are parallel hyperplanes and <M>{'f'}</M> is
+            monotonic, the set of inputs a single unit assigns to any output threshold is always a
+            half-space. Any labelling that is not linearly separable is out of reach — no choice of{' '}
+            <M>{'\\mathbf{w}'}</M> and <M>{'b'}</M> works, and gradient descent cannot help,
+            because the problem is with the function family rather than with the search.
+          </p>
+
+          <Detail kicker="proof" title="No single neuron computes XOR">
+            <p>
+              XOR labels the four corners of the unit square:{' '}
+              <M>{'(0,0) \\mapsto 0'}</M>, <M>{'(0,1) \\mapsto 1'}</M>,{' '}
+              <M>{'(1,0) \\mapsto 1'}</M>, <M>{'(1,1) \\mapsto 0'}</M>. Suppose some{' '}
+              <M>{'\\mathbf{w}, b'}</M> and monotonically increasing <M>{'f'}</M> reproduced it
+              with the rule "output <M>{'\\ge'}</M> threshold means class 1". Monotonicity means
+              the rule is equivalent to <M>{'z \\ge c'}</M> for some constant <M>{'c'}</M>. Write{' '}
+              <M>{'z(x_1, x_2) = w_1x_1 + w_2x_2 + b'}</M>. The four requirements are:
+            </p>
+            <Equation plain>
+              {'\\begin{aligned} b &< c \\\\ w_2 + b &\\ge c \\\\ w_1 + b &\\ge c \\\\ w_1 + w_2 + b &< c \\end{aligned}'}
+            </Equation>
+            <p>
+              Add the second and third inequalities: <M>{'w_1 + w_2 + 2b \\ge 2c'}</M>. Add the
+              first and fourth: <M>{'w_1 + w_2 + 2b < 2c'}</M>. The same quantity is both at least{' '}
+              <M>{'2c'}</M> and strictly less than <M>{'2c'}</M>, a contradiction. No such{' '}
+              <M>{'\\mathbf{w}, b, c'}</M> exist.
+            </p>
+            <p>
+              The proof used only linearity and monotonicity, so it rules out every activation on
+              this page. What it does not rule out is two neurons: the sum{' '}
+              <M>{'x_1 + x_2'}</M> distinguishes the corners into three groups{' '}
+              <M>{'\\{0\\}, \\{1\\}, \\{2\\}'}</M>, and one hidden layer that computes two
+              different linear functions can separate the middle group from the outer two. Section
+              11 shows exactly that, trained.
+            </p>
+          </Detail>
+
+          <h3 className="subhead">The bias-as-input trick</h3>
+          <p>
+            Appending a constant 1 to the input and a column <M>{'b'}</M> to the weight matrix makes
+            the bias an ordinary weight: <M>{'\\tilde{\\mathbf{x}} = [\\mathbf{x}; 1]'}</M> and{' '}
+            <M>{'\\tilde{\\mathbf{w}} = [\\mathbf{w}; b]'}</M> give{' '}
+            <M>{'z = \\tilde{\\mathbf{w}}\\cdot\\tilde{\\mathbf{x}}'}</M>. This is the
+            dashed edge in the diagram above. It simplifies the algebra — everything becomes one
+            inner product — but implementations usually keep the bias separate, because it is
+            excluded from weight decay and because the batched form adds it by broadcasting rather
+            than by materialising a column of ones.
           </p>
         </div>
 

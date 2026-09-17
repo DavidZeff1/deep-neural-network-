@@ -42,6 +42,14 @@ async function setRange(locator, value) {
   await page.waitForTimeout(90);
 }
 
+/** Finds a slider by the text of its label, so adding controls cannot break the test. */
+function slider(root, labelText) {
+  return root
+    .locator('.control', { has: page.locator('.control__label', { hasText: labelText }) })
+    .locator('input[type=range]')
+    .first();
+}
+
 /** Reads a labelled stat tile value. */
 async function stat(root, label) {
   const tile = root.locator('.stat', { has: page.locator('.stat__label', { hasText: new RegExp(`^${label}$`) }) });
@@ -106,6 +114,8 @@ const num = (text) => Number(String(text).replace(/−/g, '-').replace(/[^\d.eE+
 
   await s.getByRole('radio', { name: 'ReLU', exact: true }).click();
   const canvas = s.locator('canvas').first();
+  await canvas.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
   const box = await canvas.boundingBox();
   await page.mouse.click(box.x + box.width * 0.25, box.y + box.height * 0.25);
   await page.waitForTimeout(150);
@@ -134,6 +144,32 @@ const num = (text) => Number(String(text).replace(/−/g, '-').replace(/[^\d.eE+
   const zeroNorm = num(await stat(s, '‖W‖₂'));
   check('03 zeroing weights gives ‖W‖ = 0', zeroNorm === 0, `${zeroNorm}`);
   await s.getByRole('button', { name: 'Re-initialise' }).click();
+
+  // Initialisation probe: the gain slider must change how the scale compounds.
+  const probe = s.locator('.panel', { hasText: 'Initialisation scale' });
+  await s.getByRole('button', { name: /recommended gain/ }).click();
+  await page.waitForTimeout(250);
+  const balanced = num(await stat(s, 'a std, layer 10'));
+  check('03 He gain keeps the activation scale near 1', balanced > 0.5 && balanced < 2.5, `${balanced}`);
+  await s.getByRole('button', { name: 'Too small' }).click();
+  await page.waitForTimeout(250);
+  const shrunk = num(await stat(s, 'a std, layer 10'));
+  check('03 a small gain makes activations vanish with depth', shrunk < balanced / 10, `${shrunk} vs ${balanced}`);
+  const ratio = num(await stat(s, 'ratio per layer'));
+  check('03 per-layer ratio below 1 when the gain is too small', ratio < 1, `${ratio}`);
+  await s.getByRole('button', { name: 'Too large' }).click();
+  await page.waitForTimeout(250);
+  const grown = num(await stat(s, 'a std, layer 10'));
+  check('03 a large gain makes activations explode with depth', grown > balanced * 2, `${grown} vs ${balanced}`);
+  await s.getByRole('button', { name: /recommended gain/ }).click();
+
+  // Derivations are collapsed by default and open on click.
+  const firstDetail = s.locator('details.detail').first();
+  check('03 derivations start collapsed', !(await firstDetail.evaluate((el) => el.open)));
+  await firstDetail.locator('summary').click();
+  await page.waitForTimeout(150);
+  check('03 derivation opens on click', await firstDetail.evaluate((el) => el.open));
+  await firstDetail.locator('summary').click();
 }
 
 // --- 04 activations ---------------------------------------------------------
@@ -172,6 +208,35 @@ const num = (text) => Number(String(text).replace(/−/g, '-').replace(/[^\d.eE+
   await page.waitForTimeout(120);
   const equal = await softmaxCalc.innerText();
   check('04 equal logits give uniform probabilities', equal.includes('0.3333, 0.3333, 0.3333'), equal.split('\n')[3]);
+
+  // Temperature: higher T raises the entropy towards ln 3 = 1.0986.
+  await s.getByRole('button', { name: 'Reset' }).click();
+  await page.waitForTimeout(150);
+  const entropyOf = async () => {
+    const text = await softmaxCalc.innerText();
+    const line = text.split('\n').find((l) => l.includes('H(p)')) ?? '';
+    // "H(p):  0.9089 nats (max 1.0986)" — take the first number after the colon.
+    const match = /H\(p\):\s*(−?[\d.]+)/.exec(line);
+    return num(match?.[1] ?? 'NaN');
+  };
+  const baseEntropy = await entropyOf();
+  const tSlider = slider(s.locator('.panel', { hasText: 'Logits' }), 'Temperature');
+  await setRange(tSlider, 4);
+  const hotEntropy = await entropyOf();
+  check('04 raising T raises the entropy towards ln K', hotEntropy > baseEntropy && hotEntropy < Math.log(3) + 1e-6, `${baseEntropy} -> ${hotEntropy}`);
+  await setRange(tSlider, 0.1);
+  const coldEntropy = await entropyOf();
+  check('04 lowering T concentrates the distribution', coldEntropy < 0.01, `${coldEntropy}`);
+  const coldText = await softmaxCalc.innerText();
+  check('04 low T leaves the argmax unchanged', /p:\s+1\.0000/.test(coldText), coldText.split('\n').find((l) => l.startsWith('p:')));
+  await setRange(tSlider, 1);
+
+  // Large logits must not overflow: the shift keeps the result identical.
+  await s.getByRole('button', { name: 'Large logits' }).click();
+  await page.waitForTimeout(200);
+  const large = await softmaxCalc.innerText();
+  check('04 large logits give the same probabilities, not NaN', large.includes('0.6590, 0.2424, 0.0986'), large.split('\n').find((l) => l.startsWith('p:')));
+  await s.getByRole('button', { name: 'Reset' }).click();
 }
 
 // --- 05 forward -------------------------------------------------------------
@@ -242,13 +307,23 @@ const num = (text) => Number(String(text).replace(/−/g, '-').replace(/[^\d.eE+
   check('07 loss decreased after one step', loss1 < theta0 * theta0 + 1e-9, `${loss1}`);
 
   // Divergence at a large learning rate
-  const lrSlider = s.locator('.panel', { hasText: 'Controls' }).locator('input[type=range]').nth(1);
+  const controls = s.locator('.panel', { hasText: 'Controls' });
+  const lrSlider = slider(controls, 'Learning rate');
   await setRange(lrSlider, 1.1);
-  const scrub = s.locator('.panel', { hasText: 'Controls' }).locator('input[type=range]').nth(3);
-  await setRange(scrub, 30);
+  await setRange(slider(controls, 'Scrub to iteration'), 30);
   const bigTheta = Math.abs(num(await stat(s, 'Parameter θ')));
   check('07 η = 1.1 diverges on L = θ²', bigTheta > 10, `|θ|=${bigTheta}`);
   await setRange(lrSlider, 0.1);
+  await setRange(slider(controls, 'Scrub to iteration'), 0);
+
+  // Momentum accumulates: v = beta*v + g, so after two steps |v| exceeds |g|.
+  await setRange(slider(controls, 'Momentum'), 0.9);
+  await setRange(slider(controls, 'Scrub to iteration'), 3);
+  const velocity = Math.abs(num(await stat(s, 'Velocity v')));
+  const gradient = Math.abs(num(await stat(s, 'Gradient')));
+  check('07 momentum accumulates velocity beyond the gradient', velocity > gradient, `|v|=${velocity} |g|=${gradient}`);
+  await setRange(slider(controls, 'Momentum'), 0);
+  await setRange(slider(controls, 'Scrub to iteration'), 0);
 
   await s.getByRole('radio', { name: 'Two minima' }).click();
   await page.waitForTimeout(200);
@@ -264,6 +339,27 @@ const num = (text) => Number(String(text).replace(/−/g, '-').replace(/[^\d.eE+
   await page.waitForTimeout(150);
   const w1 = num(await stat(s, 'w'));
   check('07 2-D step follows the same rule', Math.abs(w1 - (w0 - 0.15 * gw0)) < 2e-3, `${w0} -> ${w1}`);
+
+  // Feature scaling stretches the surface: the condition number must rise sharply.
+  const controls2d = s.locator('.panel', { hasText: 'Controls' });
+  const kappaBefore = num(await stat(s, 'κ \\(condition no.\\)'));
+  await setRange(slider(controls2d, 'Feature scale'), 0.2);
+  await page.waitForTimeout(300);
+  const kappaAfter = num(await stat(s, 'κ \\(condition no.\\)'));
+  check('07 feature scaling raises the condition number', kappaAfter > kappaBefore * 5, `${kappaBefore} -> ${kappaAfter}`);
+
+  // At a fixed rate, momentum should get closer to the minimum than plain descent.
+  await setRange(slider(controls2d, 'Learning rate'), 0.45);
+  await setRange(slider(controls2d, 'Iterations'), 120);
+  await setRange(slider(controls2d, 'Scrub'), 120);
+  await page.waitForTimeout(300);
+  const lossPlain = num(await stat(s, 'Loss'));
+  await setRange(slider(controls2d, 'Momentum'), 0.8);
+  await setRange(slider(controls2d, 'Scrub'), 120);
+  await page.waitForTimeout(300);
+  const lossMomentum = num(await stat(s, 'Loss'));
+  check('07 momentum converges further on an ill-conditioned surface', lossMomentum < lossPlain, `${lossPlain} -> ${lossMomentum}`);
+
   await s.getByRole('radio', { name: 'One parameter' }).click();
 }
 
@@ -275,14 +371,28 @@ const num = (text) => Number(String(text).replace(/−/g, '-').replace(/[^\d.eE+
   await page.waitForTimeout(150);
   await s.getByRole('button', { name: 'Check against finite differences' }).click();
   await page.waitForTimeout(200);
-  const chain = await s.locator('.panel', { hasText: 'Chain rule' }).locator('.calc').innerText();
-  const diffLine = chain.split('\n').find((l) => l.includes('difference'));
-  const diff = num(diffLine?.split('=').pop() ?? '1');
-  check('08 analytic gradient matches finite differences', Math.abs(diff) < 1e-6, diffLine);
-
-  const chainValue = num(chain.split('\n').find((l) => l.trim().startsWith('='))?.replace('=', '') ?? 'NaN');
-  const backpropValue = num(chain.split('\n').find((l) => l.includes('backprop gives'))?.split('gives').pop() ?? 'NaN');
+  const chainPanel = s.locator('.panel', { hasText: 'Chain rule' });
+  const rowValue = async (label) =>
+    num(
+      await chainPanel
+        .locator('tr', { has: page.locator('td', { hasText: label }) })
+        .first()
+        .locator('td')
+        .nth(1)
+        .innerText(),
+    );
+  const chainValue = await rowValue('product');
+  const backpropValue = await rowValue('backpropagation');
   check('08 chain-rule product equals the backprop value', Math.abs(chainValue - backpropValue) < 1e-6, `${chainValue} vs ${backpropValue}`);
+
+  const diffCell = await chainPanel
+    .locator('tr', { has: page.locator('td', { hasText: 'finite differences' }) })
+    .locator('td')
+    .nth(1)
+    .innerText();
+  const [numericValue, difference] = diffCell.split('\n').map(num);
+  check('08 analytic gradient matches finite differences', Math.abs(difference) < 1e-6, `numeric ${numericValue}, |Δ| ${difference}`);
+  check('08 finite-difference value matches backpropagation', Math.abs(numericValue - backpropValue) < 1e-5, `${numericValue} vs ${backpropValue}`);
 
   const lossBefore = num(await stat(s, 'Loss'));
   await s.getByRole('button', { name: 'Apply one update' }).click();
@@ -400,6 +510,8 @@ const num = (text) => Number(String(text).replace(/−/g, '-').replace(/[^\d.eE+
   await s.scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
   const canvas = s.locator('canvas').first();
+  await canvas.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
   const box = await canvas.boundingBox();
   await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.7);
   await page.waitForTimeout(200);

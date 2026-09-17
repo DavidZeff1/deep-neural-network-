@@ -8,7 +8,14 @@ import type { NetworkConfig, OutputActivation } from '../src/lib/network.ts';
 import type { ActivationName } from '../src/lib/activations.ts';
 import type { LossName } from '../src/lib/losses.ts';
 import { DATASET_NAMES, generateDataset, splitDataset } from '../src/lib/datasets.ts';
-import { gradientDescent1D, LOSS_LANDSCAPES } from '../src/lib/optimisation.ts';
+import {
+  gradientDescent1D,
+  gradientDescent2D,
+  regressionCurvature,
+  regressionLoss,
+  regressionOptimum,
+  LOSS_LANDSCAPES,
+} from '../src/lib/optimisation.ts';
 
 // --- activations -----------------------------------------------------------
 
@@ -344,5 +351,95 @@ test('landscape gradients match finite differences', () => {
         `${landscape.label} at ${theta}: ${landscape.gradient(theta)} vs ${numeric}`,
       );
     }
+  }
+});
+
+// --- momentum --------------------------------------------------------------
+
+test('momentum reduces to plain gradient descent at beta = 0', () => {
+  const plain = gradientDescent1D(LOSS_LANDSCAPES.quadratic, 1.8, 0.1, 10);
+  const zeroMomentum = gradientDescent1D(LOSS_LANDSCAPES.quadratic, 1.8, 0.1, 10, 0);
+  for (let i = 0; i < plain.length; i++) {
+    assert.ok(Math.abs(plain[i].theta - zeroMomentum[i].theta) < 1e-12);
+    assert.ok(Math.abs(plain[i].velocity - plain[i].gradient) < 1e-12);
+  }
+});
+
+test('momentum follows v <- beta*v + g and theta <- theta - eta*v', () => {
+  const beta = 0.8;
+  const eta = 0.05;
+  const steps = gradientDescent1D(LOSS_LANDSCAPES.quadratic, 2, eta, 5, beta);
+  let velocity = 0;
+  for (let i = 0; i < steps.length; i++) {
+    velocity = beta * velocity + steps[i].gradient;
+    assert.ok(Math.abs(steps[i].velocity - velocity) < 1e-12, `velocity at ${i}`);
+    if (i + 1 < steps.length) {
+      const expected = steps[i].theta - eta * velocity;
+      assert.ok(Math.abs(steps[i + 1].theta - expected) < 1e-12, `theta at ${i + 1}`);
+    }
+  }
+});
+
+test('feature scaling changes the condition number, not the fit', () => {
+  // At scale 1 the two curvature directions are nearly equal; shrinking the
+  // feature stretches the surface and raises the condition number sharply.
+  const balanced = regressionCurvature(1);
+  const stretched = regressionCurvature(0.2);
+  assert.ok(balanced.conditionNumber < 2, `kappa(1) = ${balanced.conditionNumber}`);
+  assert.ok(stretched.conditionNumber > 10, `kappa(0.2) = ${stretched.conditionNumber}`);
+
+  // The fitted line is the same function of the original x either way.
+  const a = regressionOptimum(1);
+  const b = regressionOptimum(0.2);
+  assert.ok(Math.abs(a.w - b.w * 0.2) < 1e-9, `${a.w} vs ${b.w * 0.2}`);
+  assert.ok(Math.abs(a.b - b.b) < 1e-9);
+  assert.ok(Math.abs(regressionLoss(a, 1) - regressionLoss(b, 0.2)) < 1e-12);
+});
+
+test('momentum converges faster at a conservative learning rate on an ill-conditioned surface', () => {
+  const scale = 0.2; // condition number ≈ 32
+  const start = { w: 0, b: 0 };
+  const optimum = regressionOptimum(scale);
+  const distance = (s: { w: number; b: number }) => Math.hypot(s.w - optimum.w, s.b - optimum.b);
+  const eta = regressionCurvature(scale).maxStableRate * 0.5;
+  const plain = gradientDescent2D(start, eta, 120, 0, scale);
+  const withMomentum = gradientDescent2D(start, eta, 120, 0.8, scale);
+  const plainDistance = distance(plain[plain.length - 1]);
+  const momentumDistance = distance(withMomentum[withMomentum.length - 1]);
+  assert.ok(
+    momentumDistance < plainDistance / 100,
+    `momentum ${momentumDistance} vs plain ${plainDistance}`,
+  );
+});
+
+test('too much momentum overshoots even below the plain stability limit', () => {
+  const scale = 0.2;
+  const start = { w: 0, b: 0 };
+  const optimum = regressionOptimum(scale);
+  const distance = (s: { w: number; b: number }) => Math.hypot(s.w - optimum.w, s.b - optimum.b);
+  const eta = regressionCurvature(scale).maxStableRate * 0.5;
+  const tuned = gradientDescent2D(start, eta, 120, 0.8, scale);
+  const excessive = gradientDescent2D(start, eta, 120, 0.97, scale);
+  assert.ok(
+    distance(excessive[excessive.length - 1]) > distance(tuned[tuned.length - 1]),
+    'beta = 0.97 should be worse than beta = 0.8 at this learning rate',
+  );
+});
+
+test('the stability bound 2/lambda_max separates convergence from divergence', () => {
+  for (const scale of [0.2, 1, 2.5]) {
+    const { maxStableRate, eigenvalues, conditionNumber } = regressionCurvature(scale);
+    assert.ok(eigenvalues[0] >= eigenvalues[1]);
+    assert.ok(conditionNumber >= 1);
+    const start = { w: 0, b: 0 };
+    const stable = gradientDescent2D(start, maxStableRate * 0.9, 300, 0, scale);
+    const unstable = gradientDescent2D(start, maxStableRate * 1.1, 80, 0, scale);
+    const stableEnd = stable[stable.length - 1];
+    const unstableEnd = unstable[unstable.length - 1];
+    assert.ok(stableEnd.loss < stable[0].loss, `scale ${scale}: stable run did not descend`);
+    assert.ok(
+      unstableEnd.loss > stable[0].loss,
+      `scale ${scale}: eta above the bound should not converge (${unstableEnd.loss})`,
+    );
   }
 });

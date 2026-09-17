@@ -2,11 +2,17 @@ import { useMemo, useState } from 'react';
 import { Section } from '../components/layout/Section.tsx';
 import type { SectionProps } from './registry.ts';
 import type { NetworkConfig } from '../lib/network.ts';
+import { MLP } from '../lib/network.ts';
+import { ACTIVATIONS, HIDDEN_ACTIVATIONS } from '../lib/activations.ts';
+import type { ActivationName } from '../lib/activations.ts';
+import { makeGaussian, makeRng } from '../lib/rng.ts';
+import { Plot, Polyline } from '../components/viz/Plot.tsx';
 import { useMutableNetwork } from '../hooks/useMutableNetwork.ts';
 import { NetworkDiagram, NEGATIVE_COLOR, POSITIVE_COLOR } from '../components/viz/NetworkDiagram.tsx';
 import type { DiagramSelection } from '../components/viz/NetworkDiagram.tsx';
-import { Panel, Note, Stats } from '../components/ui/layout.tsx';
-import { Button, Slider } from '../components/ui/controls.tsx';
+import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
+import { Detail } from '../components/ui/Detail.tsx';
+import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { fmt } from '../lib/format.ts';
 
@@ -120,6 +126,197 @@ function MatrixGrid({
         b
       </text>
     </svg>
+  );
+}
+
+
+const ACT_COLOR = '#3b82f6';
+const GRAD_COLOR = '#e0761f';
+
+interface LayerScale {
+  layer: number;
+  activationStd: number;
+  gradientStd: number;
+}
+
+/**
+ * Initialises a deep network with weight standard deviation gain/sqrt(fan_in),
+ * runs a batch of standard-normal inputs through it, and measures how the
+ * spread of activations and of pre-activation gradients changes with depth.
+ */
+function probeInitialisation(
+  depth: number,
+  width: number,
+  gain: number,
+  activation: ActivationName,
+  samples = 64,
+): LayerScale[] {
+  const net = new MLP({
+    inputSize: width,
+    hiddenUnits: Array.from({ length: depth }, () => width),
+    outputSize: 1,
+    hiddenActivation: activation,
+    outputActivation: 'linear',
+    loss: 'mse',
+    seed: 99,
+  });
+
+  const rng = makeRng(4242);
+  const gaussian = makeGaussian(rng);
+  for (let l = 0; l < net.W.length; l++) {
+    const std = gain / Math.sqrt(net.sizes[l]);
+    for (const row of net.W[l]) {
+      for (let i = 0; i < row.length; i++) row[i] = gaussian() * std;
+    }
+    net.b[l].fill(0);
+  }
+
+  const activationSums = new Array(depth).fill(0);
+  const gradientSums = new Array(depth).fill(0);
+  let counted = 0;
+
+  for (let s = 0; s < samples; s++) {
+    const x = Array.from({ length: width }, () => gaussian());
+    const trace = net.forward(x);
+    // Fix the output gradient at 1 so the plot isolates the backward dynamics.
+    const grads = net.backward(trace, [trace.output[0] - 0.5]);
+    for (let l = 0; l < depth; l++) {
+      for (const v of trace.layers[l].a) activationSums[l] += v * v;
+      for (const v of grads.delta[l]) gradientSums[l] += v * v;
+    }
+    counted += 1;
+  }
+
+  return Array.from({ length: depth }, (_, l) => ({
+    layer: l + 1,
+    activationStd: Math.sqrt(activationSums[l] / (counted * width)),
+    gradientStd: Math.sqrt(gradientSums[l] / (counted * width)),
+  }));
+}
+
+const LOG_FLOOR = 1e-12;
+const safeLog = (v: number) => Math.log10(Math.max(LOG_FLOOR, v));
+
+function InitialisationProbe() {
+  const [gain, setGain] = useState(1.41);
+  const [activation, setActivation] = useState<ActivationName>('relu');
+  const depth = 10;
+  const width = 48;
+
+  const scales = useMemo(
+    () => probeInitialisation(depth, width, gain, activation),
+    [gain, activation],
+  );
+
+  const activationPoints = scales.map((s) => [s.layer, safeLog(s.activationStd)] as [number, number]);
+  const gradientPoints = scales.map((s) => [s.layer, safeLog(s.gradientStd)] as [number, number]);
+  const recommended = activation === 'relu' || activation === 'leakyRelu' ? Math.SQRT2 : 1;
+  const last = scales[scales.length - 1];
+  const first = scales[0];
+
+  return (
+    <div className="grid grid--side">
+      <Panel
+        title={`${depth} layers of ${width} units, weights ~ N(0, gain²/fan_in)`}
+        hint="log scale"
+        caption="Blue: the standard deviation of the activations entering each layer. Orange: the standard deviation of δ at each layer, measured with the output gradient fixed at 1. A flat line means the scale is preserved; a sloping line means it compounds geometrically with depth."
+      >
+        <Plot
+          xDomain={[1, depth]}
+          yDomain={[-8, 4]}
+          height={280}
+          xLabel="layer"
+          yLabel="log₁₀ std"
+          xTicks={depth}
+          showZeroLines={false}
+          ariaLabel="Activation and gradient scale by layer"
+        >
+          {(plotScales) => (
+            <>
+              <line
+                x1={0}
+                x2={plotScales.innerWidth}
+                y1={plotScales.y(0)}
+                y2={plotScales.y(0)}
+                stroke="var(--border-strong)"
+                strokeDasharray="4 4"
+              />
+              <text x={plotScales.innerWidth - 4} y={plotScales.y(0) - 5} textAnchor="end">
+                std = 1
+              </text>
+              <Polyline points={activationPoints} scales={plotScales} color={ACT_COLOR} width={2.2} />
+              <Polyline points={gradientPoints} scales={plotScales} color={GRAD_COLOR} width={2.2} dash="5 4" />
+              {activationPoints.map(([x, y]) => (
+                <circle key={`a${x}`} cx={plotScales.x(x)} cy={plotScales.y(y)} r={3} fill={ACT_COLOR} />
+              ))}
+              {gradientPoints.map(([x, y]) => (
+                <circle key={`g${x}`} cx={plotScales.x(x)} cy={plotScales.y(y)} r={3} fill={GRAD_COLOR} />
+              ))}
+            </>
+          )}
+        </Plot>
+        <div style={{ marginTop: 10 }}>
+          <Legend
+            items={[
+              { color: ACT_COLOR, label: 'activation std' },
+              { color: GRAD_COLOR, label: 'gradient std', dashed: true },
+            ]}
+          />
+        </div>
+      </Panel>
+
+      <div className="stack">
+        <Panel title="Initialisation scale">
+          <div className="stack stack--sm">
+            <Slider
+              label="gain"
+              min={0.2}
+              max={3}
+              step={0.01}
+              value={gain}
+              onChange={setGain}
+              display={fmt(gain, 2)}
+            />
+            <Segmented
+              label="Activation"
+              value={activation}
+              options={HIDDEN_ACTIVATIONS.map((n) => ({ value: n, label: ACTIVATIONS[n].label }))}
+              onChange={setActivation}
+            />
+          </div>
+          <div className="btn-row" style={{ marginTop: 12 }}>
+            <Button onClick={() => setGain(Number(recommended.toFixed(2)))}>
+              Use the recommended gain ({fmt(recommended, 2)})
+            </Button>
+            <Button onClick={() => setGain(0.7)}>Too small</Button>
+            <Button onClick={() => setGain(2.2)}>Too large</Button>
+          </div>
+        </Panel>
+
+        <Stats
+          items={[
+            { label: 'a std, layer 1', value: fmt(first.activationStd, 3) },
+            { label: `a std, layer ${depth}`, value: fmt(last.activationStd, 3), accent: true },
+            { label: 'δ std, layer 1', value: fmt(first.gradientStd, 6) },
+            { label: `δ std, layer ${depth}`, value: fmt(last.gradientStd, 6) },
+            {
+              label: 'ratio per layer',
+              value: fmt(Math.pow(last.activationStd / Math.max(1e-12, first.activationStd), 1 / (depth - 1)), 3),
+            },
+          ]}
+        />
+
+        <Note>
+          <p style={{ fontSize: 14 }}>
+            At gain = {fmt(recommended, 2)} both lines are close to flat. Move the slider to 0.7 and
+            the activations fall by roughly a factor of {fmt(0.7 / recommended, 2)} per layer, so
+            after ten layers they are {fmt(Math.pow(0.7 / recommended, 9), 4)} times their original
+            size. Move it to 2.2 and the same factor acts upward until the numbers overflow. The
+            gradient line moves with it, because the backward pass multiplies by the same matrices.
+          </p>
+        </Note>
+      </div>
+    </div>
   );
 }
 
@@ -289,11 +486,18 @@ export function WeightsSection({ id, index }: SectionProps) {
 
           <h3 className="subhead">Initialisation is not arbitrary</h3>
           <p>
-            Setting every weight to the same value makes every unit in a layer compute the same
-            thing, receive the same gradient, and stay identical for ever. Random initialisation
-            breaks that symmetry. The scale matters too: weights that are too large push{' '}
-            <M>{'|z|'}</M> into the flat regions of the activation, where <M>{"f'(z) \\approx 0"}</M>{' '}
-            and learning stalls.
+            Two things can go wrong before training even starts. The first is symmetry: if two units
+            in a layer begin with identical incoming weights and biases, they compute identical
+            values, receive identical gradients, and remain identical for every subsequent update.
+            A layer of <M>{'n'}</M> such units has the expressive power of one unit, permanently.
+          </p>
+          <p>
+            The second is scale. The forward pass multiplies by <M>{'W'}</M> at every layer, and the
+            backward pass multiplies by <M>{'W^{\\top}'}</M> at every layer. If those
+            multiplications shrink the typical magnitude by a factor <M>{'r < 1'}</M>, then after{' '}
+            <M>{'L'}</M> layers the signal is <M>{'r^{L}'}</M> times its original size. With{' '}
+            <M>{'r = 0.5'}</M> and <M>{'L = 20'}</M> that is <M>{'10^{-6}'}</M>. With{' '}
+            <M>{'r = 2'}</M> it is <M>{'10^{6}'}</M>. Neither is usable, and both happen easily.
           </p>
           <p>
             The buttons rescale every weight in the network. Watch the hidden activations in the
@@ -301,6 +505,79 @@ export function WeightsSection({ id, index }: SectionProps) {
             press ÷2 a few times and they collapse towards 0, where every unit carries almost the
             same signal.
           </p>
+
+          <Detail kicker="argument" title="Why identical weights stay identical">
+            <p>
+              Take units <M>{'j'}</M> and <M>{'k'}</M> in the same layer with{' '}
+              <M>{'W^{(l)}_{j\\cdot} = W^{(l)}_{k\\cdot}'}</M> and{' '}
+              <M>{'b^{(l)}_j = b^{(l)}_k'}</M>. They receive the same input vector{' '}
+              <M>{'\\mathbf{a}^{(l-1)}'}</M>, so <M>{'z_j = z_k'}</M> and{' '}
+              <M>{'a_j = a_k'}</M> for every example.
+            </p>
+            <p>
+              Now look at the gradients. Section 08 derives{' '}
+              <M>{"\\delta^{(l)}_j = f'(z^{(l)}_j)\\sum_{p} W^{(l+1)}_{pj}\\delta^{(l+1)}_p"}</M>.
+              The factor <M>{"f'(z_j)"}</M> equals <M>{"f'(z_k)"}</M> because the pre-activations are
+              equal. The sum differs only through the outgoing weights{' '}
+              <M>{'W^{(l+1)}_{pj}'}</M> and <M>{'W^{(l+1)}_{pk}'}</M> — so if those columns are also
+              equal (as they are when the whole matrix is initialised to one constant), then{' '}
+              <M>{'\\delta_j = \\delta_k'}</M>, and therefore{' '}
+              <M>{'\\partial L/\\partial W_{ji} = \\delta_j a_i = \\delta_k a_i = \\partial L/\\partial W_{ki}'}</M>.
+            </p>
+            <p>
+              The two rows receive the same update, so they are still equal after the step. By
+              induction they are equal for ever. Breaking the tie requires the initial values to
+              differ; random draws from a continuous distribution do so with probability 1.
+            </p>
+            <p>
+              Biases can safely start at zero — the weights alone break the symmetry — which is why
+              the standard practice is random weights and zero biases. This site follows it.
+            </p>
+          </Detail>
+
+          <Detail title="Where 2/fan_in and 2/(fan_in + fan_out) come from">
+            <p>
+              Consider one pre-activation <M>{'z_j = \\sum_{i=1}^{n_{\\text{in}}} w_{ji} a_i'}</M>{' '}
+              with the bias at zero. Treat the weights as independent, zero-mean, with variance{' '}
+              <M>{'\\sigma_w^2'}</M>, and independent of the activations. The variance of a sum of
+              independent zero-mean terms is the sum of the variances:
+            </p>
+            <Equation plain>
+              {'\\operatorname{Var}(z_j) = \\sum_{i} \\operatorname{Var}(w_{ji} a_i) = n_{\\text{in}}\\,\\sigma_w^2\\,\\mathbb{E}[a^2]'}
+            </Equation>
+            <p>
+              To keep <M>{'\\operatorname{Var}(z)'}</M> equal to <M>{'\\mathbb{E}[a^2]'}</M> from
+              layer to layer we need <M>{'n_{\\text{in}}\\sigma_w^2 = 1'}</M>, that is{' '}
+              <M>{'\\sigma_w^2 = 1/n_{\\text{in}}'}</M>. That is the right answer for an
+              activation that passes its input through roughly unchanged near zero, such as tanh.
+            </p>
+            <p>
+              ReLU changes the accounting. If <M>{'z'}</M> is symmetric about zero then{' '}
+              <M>{'a = \\max(0, z)'}</M> is zero half the time, and{' '}
+              <M>{'\\mathbb{E}[a^2] = \\tfrac{1}{2}\\operatorname{Var}(z)'}</M>. Substituting
+              into the recursion gives{' '}
+              <M>{'\\operatorname{Var}(z^{(l)}) = \\tfrac{1}{2} n_{\\text{in}} \\sigma_w^2 \\operatorname{Var}(z^{(l-1)})'}</M>,
+              so preserving the scale requires
+            </p>
+            <Equation plain>{'\\sigma_w^2 = \\frac{2}{n_{\\text{in}}} \\quad \\text{(He)}'}</Equation>
+            <p>
+              The backward pass gives a second condition. The gradient recursion multiplies by{' '}
+              <M>{'W^{\\top}'}</M>, where the sum now runs over the <M>{'n_{\\text{out}}'}</M>{' '}
+              units of the next layer, so preserving the gradient scale asks for{' '}
+              <M>{'\\sigma_w^2 = 1/n_{\\text{out}}'}</M>. The two conditions disagree whenever the
+              layer changes width. Glorot initialisation takes the harmonic compromise
+            </p>
+            <Equation plain>
+              {'\\sigma_w^2 = \\frac{2}{n_{\\text{in}} + n_{\\text{out}}} \\quad \\text{(Glorot)}'}
+            </Equation>
+            <p>
+              which satisfies neither exactly and both approximately. In terms of the{' '}
+              <em>gain</em> in the plot below, writing{' '}
+              <M>{'\\sigma_w = g/\\sqrt{n_{\\text{in}}}'}</M>: He is{' '}
+              <M>{'g = \\sqrt{2} \\approx 1.41'}</M> and the tanh-appropriate value is{' '}
+              <M>{'g = 1'}</M>.
+            </p>
+          </Detail>
         </div>
 
         <div className="stack">
@@ -348,6 +625,67 @@ export function WeightsSection({ id, index }: SectionProps) {
               { label: '‖W‖₂', value: fmt(weightNorm, 2) },
             ]}
           />
+        </div>
+      </div>
+
+      <h3 className="subhead">Initialisation scale, measured</h3>
+      <p className="prose-block">
+        The derivation above predicts a specific gain. The panel below checks it: a 10-layer network
+        of 48 units, weights drawn from{' '}
+        <M>{'\\mathcal{N}(0, g^2/n_{\\text{in}})'}</M>, fed standard-normal inputs. It reports the
+        standard deviation of the activations and of <M>{'\\delta'}</M> at every layer, on a log
+        scale, so a constant scale is a horizontal line and a compounding one is a straight slope.
+      </p>
+
+      <InitialisationProbe />
+
+      <div className="grid grid--2">
+        <div className="prose-block">
+          <h3 className="subhead">What the plot shows</h3>
+          <ul>
+            <li>
+              <strong>ReLU at gain 1.41:</strong> both lines are nearly flat. This is He
+              initialisation, and it is what this site uses for ReLU-family activations.
+            </li>
+            <li>
+              <strong>ReLU at gain 1.0:</strong> the activations decay by a factor of{' '}
+              <M>{'1/\\sqrt{2} \\approx 0.71'}</M> per layer, exactly as the{' '}
+              <M>{'\\mathbb{E}[a^2] = \\tfrac12 \\operatorname{Var}(z)'}</M> term predicts.
+            </li>
+            <li>
+              <strong>Tanh at gain 1.41:</strong> the activations do not explode, because tanh
+              saturates — but the gradient line falls, because{' '}
+              <M>{"\\tanh'(z) = 1 - \\tanh^2(z)"}</M> is small wherever the unit is saturated.
+              Saturation converts an exploding forward pass into a vanishing backward one.
+            </li>
+            <li>
+              <strong>Any activation at gain 0.4:</strong> both lines fall steeply. The last layers
+              still train, but the first layers receive gradients many orders of magnitude smaller
+              than the last, so they barely move.
+            </li>
+          </ul>
+        </div>
+        <div className="prose-block">
+          <h3 className="subhead">Permutation symmetry</h3>
+          <p>
+            Random initialisation breaks the symmetry between units, but one symmetry remains and
+            cannot be removed. Permuting the units of a hidden layer — reordering the rows of{' '}
+            <M>{'W^{(l)}'}</M> and <M>{'\\mathbf{b}^{(l)}'}</M>, and the columns of{' '}
+            <M>{'W^{(l+1)}'}</M> in the same way — leaves the function computed by the network
+            exactly unchanged.
+          </p>
+          <p>
+            A layer of <M>{'n'}</M> units therefore admits <M>{'n!'}</M> parameter settings that all
+            compute the same function, and a network with hidden widths{' '}
+            <M>{'n_1, \\ldots, n_{L-1}'}</M> has at least <M>{'\\prod_l n_l!'}</M> copies of every
+            minimum. For a modest 8-8 network that is <M>{'40320^2 \\approx 1.6\\times 10^{9}'}</M>{' '}
+            equivalent points.
+          </p>
+          <p>
+            This is why comparing two trained networks weight-by-weight is meaningless, and why
+            "the" minimum found by training is never unique. It also means the loss surface is
+            highly non-convex by construction, independent of the data.
+          </p>
         </div>
       </div>
 

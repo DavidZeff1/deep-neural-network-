@@ -12,6 +12,7 @@ import { DecisionBoundary } from '../components/viz/DecisionBoundary.tsx';
 import { MetricChart } from '../components/viz/MetricChart.tsx';
 import { ArchitectureControls } from '../components/ui/ArchitectureControls.tsx';
 import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
+import { Detail, Steps } from '../components/ui/Detail.tsx';
 import { Button, SelectField, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { fmt, fmtPercent } from '../lib/format.ts';
@@ -256,7 +257,7 @@ export function TrainingSection({ id, index }: SectionProps) {
       <div className="grid grid--2">
         <div className="prose-block">
           <h3 className="subhead">The loop, precisely</h3>
-          <ol>
+          <Steps>
             <li>Shuffle the training set and split it into batches of size <M>{'B'}</M>.</li>
             <li>
               For each batch: forward pass, loss, backward pass, then{' '}
@@ -264,14 +265,131 @@ export function TrainingSection({ id, index }: SectionProps) {
               <M>{'\\bar{g}'}</M> the mean gradient over the batch.
             </li>
             <li>After all batches, one epoch is complete; record the metrics.</li>
-          </ol>
+          </Steps>
+          <p>
+            With <M>{'m'}</M> examples and batch size <M>{'B'}</M>, one epoch performs{' '}
+            <M>{'\\lceil m/B \\rceil'}</M> updates. The current settings — {train.length}{' '}
+            examples at batch size {batchSize} — give{' '}
+            <strong className="mono">{Math.ceil(train.length / batchSize)}</strong> updates per
+            epoch. Halving the batch size doubles the number of updates per epoch while halving the
+            work per update, so an epoch costs the same either way but moves the parameters through
+            twice as many steps.
+          </p>
           <p>
             The loss reported here is recomputed on the full training set after each epoch, with
             dropout disabled. This differs slightly from the running average frameworks print during
-            an epoch, which is measured while the parameters are still changing.
+            an epoch, which is measured while the parameters are still changing and is therefore a
+            mixture of several different models.
           </p>
+          <p>
+            The shuffle in step 1 matters. Without it the batches are the same every epoch, so the
+            sequence of updates is periodic and the model can fit the batch boundaries rather than
+            the data. If the file happens to be sorted by label, an unshuffled batch may contain a
+            single class, and its gradient points towards predicting that class for everything.
+          </p>
+
+          <Detail kicker="derivation" title="Why the gradient noise falls as 1/√B">
+            <p>
+              Let <M>{'g_i = \\nabla_\\theta L(\\hat{y}^{(i)}, y^{(i)})'}</M> be the gradient
+              from one example. The full-dataset gradient is the mean over all{' '}
+              <M>{'m'}</M> examples; a batch estimate is the mean over{' '}
+              <M>{'B'}</M> of them drawn uniformly:
+            </p>
+            <Equation plain>
+              {'\\bar{g}_{\\mathcal{B}} = \\frac{1}{B}\\sum_{i\\in\\mathcal{B}} g_i'}
+            </Equation>
+            <p>
+              Each draw has the full gradient as its expectation, so{' '}
+              <M>{'\\mathbb{E}[\\bar{g}_{\\mathcal{B}}] = \\nabla J'}</M> — mini-batch
+              gradients are unbiased. For the spread, use the variance of a mean of{' '}
+              <M>{'B'}</M> independent draws:
+            </p>
+            <Equation plain>
+              {'\\operatorname{Var}(\\bar{g}_{\\mathcal{B}}) = \\frac{1}{B^2}\\sum_{i\\in\\mathcal{B}}\\operatorname{Var}(g_i) = \\frac{\\Sigma}{B}'}
+            </Equation>
+            <p>
+              where <M>{'\\Sigma'}</M> is the per-example gradient covariance. The standard
+              deviation is therefore <M>{'\\sqrt{\\Sigma/B}'}</M>, proportional to{' '}
+              <M>{'1/\\sqrt{B}'}</M>.
+            </p>
+            <p>
+              The consequence is a diminishing return. Going from <M>{'B = 1'}</M> to{' '}
+              <M>{'B = 4'}</M> halves the noise at four times the cost per update. Going from{' '}
+              <M>{'B = 64'}</M> to <M>{'B = 256'}</M> halves it again, also at four times the cost —
+              but by then the noise is already small relative to the gradient, so the extra
+              precision buys very little. This is why batch sizes cluster in the tens to low
+              hundreds rather than being made as large as memory allows.
+            </p>
+            <p>
+              Set the batch size to 1 above and the loss curve becomes visibly jagged; set it to 64
+              and the curve smooths out while progress per epoch often slows. Neither is a bug —
+              they are the two ends of the same trade.
+            </p>
+          </Detail>
         </div>
         <div className="prose-block">
+          <h3 className="subhead">Learning rate and batch size are coupled</h3>
+          <p>
+            Over one epoch, SGD takes <M>{'m/B'}</M> steps of size proportional to{' '}
+            <M>{'\\eta'}</M>, so the total distance travelled scales as{' '}
+            <M>{'\\eta m / B'}</M>. Halving <M>{'B'}</M> doubles the number of steps and therefore
+            doubles the distance covered per epoch at fixed <M>{'\\eta'}</M>.
+          </p>
+          <p>
+            The common heuristic — the <em>linear scaling rule</em> — is to change{' '}
+            <M>{'\\eta'}</M> in proportion to <M>{'B'}</M>, keeping{' '}
+            <M>{'\\eta/B'}</M> fixed. That preserves both the per-epoch distance and the ratio of
+            gradient noise to step size, which together determine how far the iterates wander around
+            a minimum. It is a good approximation for moderate batch sizes and breaks down at very
+            large ones, where the noise is already negligible and the rule pushes{' '}
+            <M>{'\\eta'}</M> past the stability bound from section 07.
+          </p>
+          <p>
+            The practical form: if you double the batch size and training slows down, double the
+            learning rate before concluding the larger batch is worse.
+          </p>
+
+          <h3 className="subhead">Reading the curves</h3>
+          <table className="data" style={{ marginBottom: 14 }}>
+            <thead>
+              <tr>
+                <th>What you see</th>
+                <th>Most likely cause</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Loss rises or oscillates wildly</td>
+                <td>η above the stability limit</td>
+              </tr>
+              <tr>
+                <td>Loss falls, then plateaus high</td>
+                <td>Model too small, or dead units</td>
+              </tr>
+              <tr>
+                <td>Loss barely moves from the start</td>
+                <td>η far too small, or vanishing gradients</td>
+              </tr>
+              <tr>
+                <td>Loss falls smoothly but very slowly</td>
+                <td>η small, or a badly conditioned surface</td>
+              </tr>
+              <tr>
+                <td>Loss becomes NaN</td>
+                <td>Overflow — η far too large, or log(0)</td>
+              </tr>
+              <tr>
+                <td>Jagged but descending</td>
+                <td>Normal for a small batch size</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            A useful first move for any of the top three: reduce <M>{'\\eta'}</M> by a factor of
+            ten and see which symptom changes. It separates optimisation problems from capacity
+            problems in one experiment.
+          </p>
+
           <h3 className="subhead">What to try</h3>
           <ul>
             <li>
@@ -291,6 +409,59 @@ export function TrainingSection({ id, index }: SectionProps) {
               <M>{"\\sigma' \\le 0.25"}</M> shrinks the gradient at every layer.
             </li>
           </ul>
+        </div>
+      </div>
+
+      <div className="grid grid--2">
+        <div className="prose-block">
+          <h3 className="subhead">When is training finished?</h3>
+          <p>
+            There is no state the algorithm reaches and reports. Gradient descent on a non-convex
+            surface with stochastic gradients does not converge to a point; it settles into a region
+            and wanders inside it, with the size of the region set by{' '}
+            <M>{'\\eta'}</M> and the gradient noise. Training stops when a criterion you choose is
+            met, not when the algorithm says so.
+          </p>
+          <p>The criteria actually used, in rough order of preference:</p>
+          <ul>
+            <li>
+              <strong>Validation loss stops improving</strong> for a fixed number of epochs — early
+              stopping, covered in section 10. This is the standard.
+            </li>
+            <li>
+              <strong>A compute budget is exhausted.</strong> Honest, and common at scale.
+            </li>
+            <li>
+              <strong>The training loss falls below a threshold.</strong> Only meaningful when the
+              threshold comes from the noise floor of the data rather than from a round number.
+            </li>
+          </ul>
+          <p>
+            A training loss of exactly zero is usually a warning rather than an achievement: it
+            means the model has enough capacity to fit every training label exactly, including the
+            mislabelled ones.
+          </p>
+        </div>
+        <div className="prose-block">
+          <h3 className="subhead">What stochasticity buys</h3>
+          <p>
+            The noise in mini-batch gradients is not purely a cost. Full-batch gradient descent on a
+            non-convex surface follows the slope exactly and stops at the first stationary point it
+            reaches — including saddle points and sharp, narrow minima. Mini-batch noise perturbs
+            each step, which lets the iterates escape both.
+          </p>
+          <p>
+            The effect is selective. A minimum that is narrow in some direction has high curvature
+            there, so noise of a given size produces a large increase in loss and the iterates get
+            pushed out. A wide, flat minimum absorbs the same noise with little change in loss and
+            the iterates stay. SGD therefore drifts towards flatter minima, and flatter minima tend
+            to generalise better — a small change in the parameters, or in the data, changes the
+            predictions less.
+          </p>
+          <p>
+            This is one reason very large batches can generalise worse than moderate ones at an
+            equal number of epochs, even when the training loss reached is the same.
+          </p>
         </div>
       </div>
 

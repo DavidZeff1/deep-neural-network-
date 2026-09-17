@@ -4,6 +4,7 @@ import type { SectionProps } from './registry.ts';
 import { ACTIVATIONS, softmax } from '../lib/activations.ts';
 import type { ActivationName } from '../lib/activations.ts';
 import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
+import { Detail } from '../components/ui/Detail.tsx';
 import { Segmented, Slider, Button } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { Curve, Marker, Plot } from '../components/viz/Plot.tsx';
@@ -21,10 +22,13 @@ const CURVE_COLORS: Record<ActivationName, string> = {
 
 function SoftmaxPanel() {
   const [logits, setLogits] = useState([2.0, 1.0, 0.1]);
-  const probabilities = softmax(logits);
-  const max = Math.max(...logits);
-  const exps = logits.map((z) => Math.exp(z - max));
+  const [temperature, setTemperature] = useState(1);
+  const scaled = logits.map((z) => z / temperature);
+  const probabilities = softmax(scaled);
+  const max = Math.max(...scaled);
+  const exps = scaled.map((z) => Math.exp(z - max));
   const sum = exps.reduce((a, b) => a + b, 0);
+  const entropy = -probabilities.reduce((acc, p) => acc + p * Math.log(Math.max(1e-12, p)), 0);
   const width = 480;
   const height = 190;
   const barWidth = 74;
@@ -97,10 +101,29 @@ function SoftmaxPanel() {
               />
             ))}
           </div>
+          <div style={{ marginTop: 12 }}>
+            <Slider
+              label={<>Temperature T</>}
+              min={0.1}
+              max={4}
+              step={0.05}
+              value={temperature}
+              onChange={setTemperature}
+              display={fmt(temperature, 2)}
+            />
+          </div>
           <div className="btn-row" style={{ marginTop: 12 }}>
-            <Button onClick={() => setLogits([2, 1, 0.1])}>Reset</Button>
+            <Button
+              onClick={() => {
+                setLogits([2, 1, 0.1]);
+                setTemperature(1);
+              }}
+            >
+              Reset
+            </Button>
             <Button onClick={() => setLogits([0, 0, 0])}>All equal</Button>
             <Button onClick={() => setLogits([6, 1, 0.1])}>One dominant</Button>
+            <Button onClick={() => setLogits([102, 101, 100.1])}>Large logits</Button>
           </div>
         </Panel>
 
@@ -125,6 +148,10 @@ function SoftmaxPanel() {
             <div className="calc__line">
               <span className="calc__label">Σp:    </span>
               {fmt(probabilities.reduce((a, b) => a + b, 0), 6)}
+            </div>
+            <div className="calc__line">
+              <span className="calc__label">H(p):  </span>
+              {fmt(entropy, 4)} nats (max {fmt(Math.log(3), 4)})
             </div>
           </div>
         </Panel>
@@ -260,6 +287,63 @@ export function ActivationsSection({ id, index }: SectionProps) {
 
       <div className="grid grid--2">
         <div className="prose-block">
+          <h3 className="subhead">What f has to provide</h3>
+          <p>
+            Only two properties are essential. <M>{'f'}</M> must be non-linear, or the whole network
+            collapses to one affine map. And it must be differentiable almost everywhere, or
+            gradient descent has nothing to work with. Everything else — the exact shape, the
+            output range, whether it saturates — is a trade-off rather than a requirement.
+          </p>
+          <p>
+            The four functions here differ in three measurable ways: the range of{' '}
+            <M>{'f'}</M>, the maximum of <M>{"f'"}</M>, and whether <M>{"f'"}</M> reaches zero.
+          </p>
+          <table className="data" style={{ marginBottom: 14 }}>
+            <thead>
+              <tr>
+                <th>f</th>
+                <th>range</th>
+                <th>max f′</th>
+                <th>f′ → 0</th>
+                <th>zero-centred</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>ReLU</td>
+                <td>[0, ∞)</td>
+                <td>1</td>
+                <td>z &lt; 0</td>
+                <td>no</td>
+              </tr>
+              <tr>
+                <td>Leaky ReLU</td>
+                <td>(−∞, ∞)</td>
+                <td>1</td>
+                <td>never</td>
+                <td>no</td>
+              </tr>
+              <tr>
+                <td>Sigmoid</td>
+                <td>(0, 1)</td>
+                <td>0.25</td>
+                <td>|z| large</td>
+                <td>no</td>
+              </tr>
+              <tr>
+                <td>Tanh</td>
+                <td>(−1, 1)</td>
+                <td>1</td>
+                <td>|z| large</td>
+                <td>yes</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            The <em>max f′</em> column is the one that decides whether a deep stack trains, and the{' '}
+            <em>f′ → 0</em> column decides whether individual units can stop learning permanently.
+          </p>
+
           <h3 className="subhead">Why the derivative is the quantity that matters</h3>
           <p>
             During backpropagation the gradient arriving at a unit is multiplied by{' '}
@@ -276,6 +360,57 @@ export function ActivationsSection({ id, index }: SectionProps) {
             replaced sigmoid in hidden layers: for <M>{'z > 0'}</M> its derivative is exactly 1, so
             the product does not shrink.
           </p>
+
+          <Detail kicker="worked example" title="Dead ReLU units">
+            <p>
+              A ReLU unit with <M>{'z < 0'}</M> for every training example outputs 0 for all of them
+              and has <M>{"f'(z) = 0"}</M> for all of them. Its <M>{'\\delta'}</M> is therefore 0,
+              so the gradients of its incoming weights and its bias are all 0, and no update
+              changes them. The unit is permanently dead — not slow, dead.
+            </p>
+            <p>
+              Concretely: take a unit with <M>{'\\mathbf{w} = (0.4, -0.2)'}</M> and{' '}
+              <M>{'b = -3.0'}</M>, on data confined to{' '}
+              <M>{'[-1,1]^2'}</M>. The largest achievable <M>{'z'}</M> is{' '}
+              <M>{'0.4 + 0.2 - 3.0 = -2.4 < 0'}</M>, so the unit never fires. Its gradient is
+              exactly zero on every example. Nothing in the training loop can revive it, because the
+              only term that could move <M>{'b'}</M> is <M>{'\\delta = 0'}</M>.
+            </p>
+            <p>
+              How units get there: a learning rate large enough to push the bias strongly negative
+              in one step. This is a real failure mode — a fraction of units in a ReLU network
+              typically ends up dead — and it is why leaky ReLU exists. With{' '}
+              <M>{'\\alpha = 0.1'}</M> the same unit still has{' '}
+              <M>{"f'(z) = 0.1"}</M>, so its gradient is a tenth of full strength rather than zero,
+              and it can recover.
+            </p>
+          </Detail>
+
+          <Detail title="tanh is a rescaled sigmoid">
+            <p>Start from the definitions and multiply numerator and denominator by <M>{'e^{z}'}</M>:</p>
+            <Equation plain>
+              {'\\tanh(z) = \\frac{e^{z}-e^{-z}}{e^{z}+e^{-z}} = \\frac{e^{2z}-1}{e^{2z}+1}'}
+            </Equation>
+            <p>
+              Now write <M>{'\\sigma(2z) = 1/(1+e^{-2z}) = e^{2z}/(e^{2z}+1)'}</M> and compute:
+            </p>
+            <Equation plain>
+              {'2\\sigma(2z) - 1 = \\frac{2e^{2z}}{e^{2z}+1} - \\frac{e^{2z}+1}{e^{2z}+1} = \\frac{e^{2z}-1}{e^{2z}+1} = \\tanh(z)'}
+            </Equation>
+            <p>
+              So <M>{'\\tanh(z) = 2\\sigma(2z) - 1'}</M>. The two are the same function up to a
+              rescaling of the input and an affine map of the output, which means a network can
+              convert one into the other by adjusting weights and biases — the layer before can
+              supply the factor of 2, the layer after can supply the shift and scale.
+            </p>
+            <p>
+              They are nevertheless not interchangeable in practice. Differentiating the identity
+              gives <M>{"\\tanh'(z) = 4\\sigma'(2z)"}</M>, so tanh's derivative peaks at 1 while
+              sigmoid's peaks at 0.25. And tanh is zero-centred, so a layer's outputs have mean near
+              zero rather than near 0.5, which keeps the next layer's pre-activations centred rather
+              than drifting with every added layer.
+            </p>
+          </Detail>
         </div>
 
         <div className="prose-block">
@@ -301,6 +436,28 @@ export function ActivationsSection({ id, index }: SectionProps) {
             Hidden layers are a separate choice; ReLU is the standard default, with tanh preferred
             in small networks where zero-centred activations help.
           </p>
+
+          <h3 className="subhead">Logits</h3>
+          <p>
+            The pre-activations of the final layer are called logits. The name comes from the
+            inverse of the sigmoid, the logit function{' '}
+            <M>{'\\operatorname{logit}(p) = \\log\\frac{p}{1-p}'}</M>: applying it to a
+            probability recovers the <M>{'z'}</M> that produced it. So a logit is a log-odds.
+          </p>
+          <p>
+            A logit of 0 is probability 0.5, a logit of 2 is{' '}
+            <M>{'\\sigma(2) = 0.881'}</M>, a logit of 5 is 0.993. The map is compressive: moving a
+            logit from 5 to 6 changes the probability by 0.004, while moving it from 0 to 1 changes
+            it by 0.231. This is exactly the saturation that makes the gradient small at large{' '}
+            <M>{'|z|'}</M>, and the reason losses and metrics are usually computed from logits
+            rather than from probabilities.
+          </p>
+          <p>
+            Libraries keep the logits and fuse the activation into the loss for the same reason:{' '}
+            <code>sigmoid_cross_entropy_with_logits</code> never materialises{' '}
+            <M>{'\\hat{y}'}</M>, so it never has to divide by <M>{'\\hat{y}(1-\\hat{y})'}</M>{' '}
+            and never loses precision when that quantity is near zero.
+          </p>
         </div>
       </div>
 
@@ -315,17 +472,82 @@ export function ActivationsSection({ id, index }: SectionProps) {
 
       <SoftmaxPanel />
 
+      <div className="grid grid--2">
+        <div className="prose-block">
+          <h3 className="subhead">Temperature</h3>
+          <p>
+            Dividing the logits by a constant <M>{'T'}</M> before the softmax rescales how sharply
+            the distribution concentrates. The ordering of the classes never changes — division by a
+            positive constant is monotonic — but the confidence does.
+          </p>
+          <Equation plain>
+            {'p_k(T) = \\frac{e^{z_k/T}}{\\sum_j e^{z_j/T}}'}
+          </Equation>
+          <ul>
+            <li>
+              <M>{'T \\to 0'}</M>: the largest logit dominates completely and{' '}
+              <M>{'p'}</M> approaches a one-hot vector at the argmax.
+            </li>
+            <li>
+              <M>{'T = 1'}</M>: the ordinary softmax.
+            </li>
+            <li>
+              <M>{'T \\to \\infty'}</M>: every exponent goes to 0, so{' '}
+              <M>{'p'}</M> approaches the uniform distribution <M>{'1/K'}</M>.
+            </li>
+          </ul>
+          <p>
+            The entropy readout in the calculation panel quantifies this: it runs from 0 at{' '}
+            <M>{'T \\to 0'}</M> up to <M>{'\\log K = 1.0986'}</M> nats for three classes at{' '}
+            <M>{'T \\to \\infty'}</M>. Temperature is used at sampling time to control how
+            deterministic a model's choices are; it is not usually a trained parameter.
+          </p>
+        </div>
+
+        <div className="prose-block">
+          <h3 className="subhead">Numerical stability</h3>
+          <p>
+            Press <strong>Large logits</strong> above. The logits become 102, 101, 100.1 — the same
+            differences as the default, so the probabilities are identical. A naive implementation
+            would evaluate <M>{'e^{102} \\approx 10^{44}'}</M>, which is finite in double
+            precision but overflows to <M>{'\\infty'}</M> in 32-bit floats, and the division
+            returns NaN.
+          </p>
+          <p>
+            Subtracting the maximum first fixes this exactly, not approximately, because of the
+            shift invariance below: the largest shifted exponent is <M>{'e^{0} = 1'}</M> and every
+            other is in <M>{'(0, 1]'}</M>. The calculation panel shows the shifted values.
+          </p>
+          <p>
+            The same problem appears in the loss. Computing <M>{'\\log p_k'}</M> by first forming{' '}
+            <M>{'p_k'}</M> can underflow to <M>{'\\log 0 = -\\infty'}</M>. The log-sum-exp form
+            avoids it:
+          </p>
+          <Equation plain>
+            {'\\log p_k = z_k - m - \\log\\!\\sum_j e^{z_j - m}, \\quad m = \\max_j z_j'}
+          </Equation>
+          <p>
+            Every term is finite here, which is why frameworks expose{' '}
+            <code>log_softmax</code> as a primitive rather than composing a log with a softmax.
+          </p>
+        </div>
+      </div>
+
       <Note title="Two properties worth knowing" accent>
         <p>
           <strong>Shift invariance:</strong> adding a constant <M>{'c'}</M> to every logit leaves
           the output unchanged, because <M>{'e^{z_k + c} = e^{c} e^{z_k}'}</M> cancels between
-          numerator and denominator. Set all three sliders to the same value to see it.
+          numerator and denominator. Set all three sliders to the same value to see it. One
+          consequence: softmax has <M>{'K'}</M> outputs but only <M>{'K-1'}</M> degrees of freedom,
+          so the final layer's weights are not identified — adding a constant vector to every row of{' '}
+          <M>{'W^{(L)}'}</M> leaves the network's predictions unchanged.
         </p>
         <p>
           <strong>Jacobian:</strong> since each output depends on all inputs, the derivative is a
           matrix, <M>{'\\partial p_i / \\partial z_j = p_i(\\delta_{ij} - p_j)'}</M>. Composed with
           categorical cross-entropy it collapses to <M>{'\\partial L/\\partial z_k = p_k - y_k'}</M>,
-          which is why the two are almost always implemented together.
+          which is why the two are almost always implemented together. Section 08 carries out that
+          cancellation.
         </p>
       </Note>
     </Section>

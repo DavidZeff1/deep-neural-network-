@@ -13,6 +13,7 @@ import { DecisionBoundary } from '../components/viz/DecisionBoundary.tsx';
 import { MetricChart } from '../components/viz/MetricChart.tsx';
 import { ArchitectureControls } from '../components/ui/ArchitectureControls.tsx';
 import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
+import { Detail } from '../components/ui/Detail.tsx';
 import { Button, Checkbox, SelectField, Segmented, Slider } from '../components/ui/controls.tsx';
 import { M } from '../components/ui/Math.tsx';
 import { fmt, fmtPercent } from '../lib/format.ts';
@@ -452,6 +453,150 @@ export function PlaygroundSection({ id, index }: SectionProps) {
               <Slider label="Epochs per frame" min={1} max={20} step={1} value={speed} onChange={setSpeed} display={speed} />
             </div>
           </Panel>
+        </div>
+      </div>
+
+      <div className="grid grid--2">
+        <div className="prose-block">
+          <h3 className="subhead">Experiments worth running</h3>
+          <p>
+            Each of these isolates one claim made earlier. The expected outcome is stated so that a
+            surprise is informative rather than ambiguous.
+          </p>
+
+          <Detail kicker="section 02" title="A single neuron cannot solve XOR">
+            <p>
+              Dataset: XOR. Remove every hidden layer with <strong>− layer</strong>. Train.
+            </p>
+            <p>
+              Accuracy stalls near 50% and the boundary is a straight line that cannot improve. The
+              training loss plateaus well above zero — the failure is in the function family, not
+              the optimiser. Add one hidden layer of 2 units and it solves the problem.
+            </p>
+          </Detail>
+
+          <Detail kicker="section 04" title="Sigmoid hidden units stall in deep networks">
+            <p>
+              Dataset: Spiral, 4 hidden layers of 8 units, activation ReLU, η = 0.3. Train for 200
+              epochs and note the loss. Switch the activation to Sigmoid and train again from the
+              reset.
+            </p>
+            <p>
+              The sigmoid network improves far more slowly at an equal number of epochs. Each of the
+              four layers contributes a factor of at most 0.25 to the backward product, so the first
+              layer receives a gradient roughly <M>{'10^{2}'}</M> times smaller than the last.
+            </p>
+          </Detail>
+
+          <Detail kicker="section 07" title="The learning rate has a stability limit">
+            <p>
+              Dataset: Moons, 2 layers of 6, η = 0.05. Train — the loss falls smoothly. Now raise{' '}
+              <M>{'\\eta'}</M> to 1.5 while it runs.
+            </p>
+            <p>
+              The loss jumps and the boundary flails. Lower{' '}
+              <M>{'\\eta'}</M> back to 0.1 without resetting and it recovers within a few epochs.
+              The parameters were not destroyed; the steps were simply larger than the curvature
+              allowed.
+            </p>
+          </Detail>
+
+          <Detail kicker="section 09" title="Batch size trades noise against steps per epoch">
+            <p>
+              Dataset: Circles. Set the batch size to 1 and train for 30 epochs, then reset, set it
+              to 64, and train for 30 epochs again.
+            </p>
+            <p>
+              At <M>{'B = 1'}</M> the loss curve is visibly jagged but reaches a lower value per
+              epoch, because it takes {'{'}points{'}'} updates per epoch instead of a handful. At{' '}
+              <M>{'B = 64'}</M> the curve is smooth and progress per epoch is slower. Raising{' '}
+              <M>{'\\eta'}</M> with <M>{'B'}</M> recovers most of the difference.
+            </p>
+          </Detail>
+
+          <Detail kicker="section 10" title="Capacity without regularisation overfits">
+            <p>
+              Dataset: Moons, noise 0.35, 240 points, validation on. Set 4 layers of 12 units and
+              train for several hundred epochs.
+            </p>
+            <p>
+              The training loss keeps falling while the validation loss bottoms out and turns
+              upward, and the boundary grows isolated pockets around individual training points. Now
+              raise <M>{'\\lambda'}</M> to 0.02 without resetting: the pockets shrink within a few
+              epochs and the validation loss falls again.
+            </p>
+          </Detail>
+
+          <Detail kicker="section 11" title="Depth beats width at equal parameter count">
+            <p>
+              Dataset: Spiral, noise 0.05. Compare one hidden layer of 12 units (about 49
+              parameters) with three hidden layers of 6 (about 103 parameters, but far more capable),
+              then with two layers of 8. Train each for 300 epochs at η = 0.3.
+            </p>
+            <p>
+              The deeper configurations reach a lower loss and a boundary that follows the spiral
+              arms, while the single wide layer produces a boundary made of a few straight cuts.
+            </p>
+          </Detail>
+        </div>
+
+        <div className="prose-block">
+          <h3 className="subhead">What the probe is for</h3>
+          <p>
+            The probe is a single input vector held fixed while everything else changes. Clicking a
+            point on the plane sets <M>{'\\mathbf{x}'}</M>; the diagram then shows the exact
+            activations that input produces at the current parameters, and the inspector shows the
+            arithmetic behind any one of them.
+          </p>
+          <p>
+            Three things it makes visible:
+          </p>
+          <ul>
+            <li>
+              <strong>What a hidden unit responds to.</strong> Move the probe across the boundary of
+              one unit and watch its value cross zero. Each hidden unit has its own boundary, and
+              the output layer combines them.
+            </li>
+            <li>
+              <strong>Dead units.</strong> With ReLU, a unit that reads 0.00 wherever you put the
+              probe is dead. Its incoming weights will never change again — select one of its
+              connections and confirm the mean gradient is 0.
+            </li>
+            <li>
+              <strong>Saturation.</strong> With tanh, a unit pinned at ±1 across the whole plane
+              contributes almost no gradient, because <M>{"f'"}</M> is near zero there.
+            </li>
+          </ul>
+
+          <h3 className="subhead">The full loop, in one place</h3>
+          <p>
+            Everything the earlier sections separated happens here simultaneously. One click on{' '}
+            <strong>+1</strong> performs, for every mini-batch:
+          </p>
+          <ol>
+            <li>
+              A forward pass (section 05) producing <M>{'\\hat{y}'}</M> for each example, with
+              dropout applied if <M>{'p > 0'}</M>.
+            </li>
+            <li>
+              A loss evaluation (section 06) — binary cross-entropy against the labels.
+            </li>
+            <li>
+              A backward pass (section 08) producing{' '}
+              <M>{'\\partial L/\\partial W'}</M> and{' '}
+              <M>{'\\partial L/\\partial b'}</M> for every parameter.
+            </li>
+            <li>
+              A gradient-descent update (section 07), with the L2 term{' '}
+              <M>{'\\lambda W'}</M> added to the gradient if{' '}
+              <M>{'\\lambda > 0'}</M>.
+            </li>
+          </ol>
+          <p>
+            The decision boundary is then re-swept over a grid and redrawn, and the metrics are
+            recomputed on the full training and validation sets with dropout disabled. Everything
+            you see is produced by the same code the earlier sections stepped through by hand.
+          </p>
         </div>
       </div>
 

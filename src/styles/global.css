@@ -694,6 +694,10 @@ input[type='number']:hover {
 .calc__line {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* Hanging indent so a wrapped line continues under the value column
+     rather than under the label. */
+  padding-left: 12ch;
+  text-indent: -12ch;
 }
 
 .calc__label {
@@ -769,6 +773,31 @@ table.data tr.is-current td {
 .scroll-y {
   max-height: 232px;
   overflow-y: auto;
+}
+
+/*
+ * Tables inside prose carry sentences rather than only numbers, so their cells
+ * wrap instead of forcing the page wider. Tables inside panels keep nowrap for
+ * numeric alignment.
+ */
+.prose-block table.data,
+.detail__body table.data {
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+}
+
+.prose-block table.data th,
+.prose-block table.data td,
+.detail__body table.data th,
+.detail__body table.data td {
+  white-space: normal;
+  text-align: left;
+}
+
+/* Numbers inside a prose table still line up. */
+.prose-block table.data td,
+.detail__body table.data td {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1123,4 +1152,133 @@ table.data tr.is-current td {
   padding: 2px 6px;
   border-radius: 4px;
   pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Derivations and reference blocks
+   --------------------------------------------------------------------------- */
+
+.detail {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  overflow: hidden;
+  max-width: 76ch;
+}
+
+.detail + .detail {
+  margin-top: 10px;
+}
+
+.detail__summary {
+  cursor: pointer;
+  padding: 9px 14px;
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--text);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  transition: background 0.14s var(--ease);
+}
+
+.detail__summary:hover {
+  background: var(--bg-hover);
+}
+
+.detail__summary::-webkit-details-marker {
+  display: none;
+}
+
+.detail__kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  flex: none;
+}
+
+.detail__chevron {
+  margin-left: auto;
+  color: var(--text-faint);
+  transition: transform 0.16s var(--ease);
+  flex: none;
+  line-height: 1;
+}
+
+.detail[open] .detail__chevron {
+  transform: rotate(90deg);
+}
+
+.detail__body {
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.detail__body > * + * {
+  margin-top: 12px;
+}
+
+.detail__body p,
+.detail__body ul,
+.detail__body ol {
+  font-size: 14.5px;
+}
+
+table.notation {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  max-width: 76ch;
+}
+
+table.notation td {
+  padding: 6px 14px 6px 0;
+  vertical-align: top;
+  border-bottom: 1px solid var(--grid);
+  color: var(--text-muted);
+}
+
+table.notation td:first-child {
+  width: 1%;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+table.notation tr:last-child td {
+  border-bottom: 0;
+}
+
+.steps {
+  counter-reset: step;
+  list-style: none;
+  padding-left: 0;
+  max-width: 76ch;
+}
+
+.steps > li {
+  position: relative;
+  padding-left: 30px;
+  margin-bottom: 14px;
+  counter-increment: step;
+}
+
+.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg-inset);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  display: grid;
+  place-items: center;
 }

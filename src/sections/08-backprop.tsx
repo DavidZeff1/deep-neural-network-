@@ -6,9 +6,10 @@ import { useMutableNetwork } from '../hooks/useMutableNetwork.ts';
 import { ACTIVATIONS } from '../lib/activations.ts';
 import { NetworkDiagram } from '../components/viz/NetworkDiagram.tsx';
 import { Panel, Note, Stats } from '../components/ui/layout.tsx';
+import { Detail, Steps } from '../components/ui/Detail.tsx';
 import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
-import { fmt } from '../lib/format.ts';
+import { fmt, sub } from '../lib/format.ts';
 
 const CONFIG: NetworkConfig = {
   inputSize: 2,
@@ -162,14 +163,14 @@ export function BackpropSection({ id, index }: SectionProps) {
       ? [
           { label: '∂L/∂ŷ', value: (yHat - target) / (yHat * (1 - yHat)) },
           { label: "σ'(z⁽²⁾)", value: yHat * (1 - yHat) },
-          { label: `a⁽¹⁾${selected.from + 1}`, value: a1[selected.from] },
+          { label: `a⁽¹⁾${sub(selected.from + 1)}`, value: a1[selected.from] },
         ]
       : [
           { label: '∂L/∂ŷ', value: (yHat - target) / (yHat * (1 - yHat)) },
           { label: "σ'(z⁽²⁾)", value: yHat * (1 - yHat) },
-          { label: `w⁽²⁾${selected.to + 1}`, value: network.W[1][0][selected.to] },
-          { label: `f'(z⁽¹⁾${selected.to + 1})`, value: hiddenAct.df(z1[selected.to]) },
-          { label: `x${selected.from + 1}`, value: x[selected.from] },
+          { label: `w⁽²⁾${sub(selected.to + 1)}`, value: network.W[1][0][selected.to] },
+          { label: `f′(z⁽¹⁾${sub(selected.to + 1)})`, value: hiddenAct.df(z1[selected.to]) },
+          { label: `x${sub(selected.from + 1)}`, value: x[selected.from] },
         ];
   const chainProduct = chainNumbers.reduce((acc, item) => acc * item.value, 1);
 
@@ -195,6 +196,110 @@ export function BackpropSection({ id, index }: SectionProps) {
       <Equation caption="The parameter gradients are outer products of δ with the incoming activations.">
         {'\\frac{\\partial L}{\\partial W^{(l)}} = \\delta^{(l)} \\left(\\mathbf{a}^{(l-1)}\\right)^{\\!\\top}, \\qquad \\frac{\\partial L}{\\partial \\mathbf{b}^{(l)}} = \\delta^{(l)}'}
       </Equation>
+
+      <div className="prose-block">
+        <Detail kicker="derivation" title="Deriving the four equations from the chain rule">
+          <p>
+            Every quantity in the network is a function of the ones before it. The multivariable
+            chain rule says that to differentiate through an intermediate vector, you sum over its
+            components:
+          </p>
+          <Equation plain>
+            {'\\frac{\\partial L}{\\partial u} = \\sum_{k} \\frac{\\partial L}{\\partial v_k}\\,\\frac{\\partial v_k}{\\partial u}'}
+          </Equation>
+          <p>
+            Apply it four times. Write <M>{'\\delta^{(l)}_j = \\partial L/\\partial z^{(l)}_j'}</M>.
+          </p>
+          <p>
+            <strong>1. The output layer.</strong> <M>{'z^{(L)}'}</M> affects <M>{'L'}</M> only
+            through <M>{'\\hat{y} = g(z^{(L)})'}</M>, so
+          </p>
+          <Equation plain>
+            {"\\delta^{(L)}_j = \\sum_k \\frac{\\partial L}{\\partial \\hat{y}_k}\\frac{\\partial \\hat{y}_k}{\\partial z^{(L)}_j}"}
+          </Equation>
+          <p>
+            When <M>{'g'}</M> is elementwise the sum has one surviving term and this is{' '}
+            <M>{"(\\partial L/\\partial \\hat{y}_j)\\,g'(z^{(L)}_j)"}</M>. When{' '}
+            <M>{'g'}</M> is softmax every term survives, which is the Jacobian product.
+          </p>
+          <p>
+            <strong>2. The recursion.</strong> <M>{'z^{(l)}_j'}</M> affects <M>{'L'}</M> only
+            through <M>{'a^{(l)}_j = f(z^{(l)}_j)'}</M>, and that single activation feeds{' '}
+            <em>every</em> unit of the next layer. So the sum runs over the next layer:
+          </p>
+          <Equation plain>
+            {'\\delta^{(l)}_j = \\sum_p \\frac{\\partial L}{\\partial z^{(l+1)}_p}\\,\\frac{\\partial z^{(l+1)}_p}{\\partial z^{(l)}_j} = \\sum_p \\delta^{(l+1)}_p\\,\\frac{\\partial z^{(l+1)}_p}{\\partial z^{(l)}_j}'}
+          </Equation>
+          <p>
+            The inner derivative is immediate from{' '}
+            <M>{'z^{(l+1)}_p = \\sum_k W^{(l+1)}_{pk} f(z^{(l)}_k) + b^{(l+1)}_p'}</M>: only the{' '}
+            <M>{'k = j'}</M> term depends on <M>{'z^{(l)}_j'}</M>, giving{' '}
+            <M>{"W^{(l+1)}_{pj}f'(z^{(l)}_j)"}</M>. Substituting and pulling the common factor out of
+            the sum:
+          </p>
+          <Equation plain>
+            {"\\delta^{(l)}_j = f'(z^{(l)}_j)\\sum_p W^{(l+1)}_{pj}\\,\\delta^{(l+1)}_p"}
+          </Equation>
+          <p>
+            The sum <M>{'\\sum_p W^{(l+1)}_{pj}\\delta^{(l+1)}_p'}</M> is the{' '}
+            <M>{'j'}</M>-th entry of <M>{'(W^{(l+1)})^{\\top}\\delta^{(l+1)}'}</M>, which is the
+            matrix form quoted above.
+          </p>
+          <p>
+            <strong>3. The weight gradient.</strong> <M>{'W^{(l)}_{ji}'}</M> appears in exactly one
+            place in the whole network: the term <M>{'W^{(l)}_{ji}a^{(l-1)}_i'}</M> inside{' '}
+            <M>{'z^{(l)}_j'}</M>. So the chain-rule sum collapses to a single term:
+          </p>
+          <Equation plain>
+            {'\\frac{\\partial L}{\\partial W^{(l)}_{ji}} = \\frac{\\partial L}{\\partial z^{(l)}_j}\\,\\frac{\\partial z^{(l)}_j}{\\partial W^{(l)}_{ji}} = \\delta^{(l)}_j\\,a^{(l-1)}_i'}
+          </Equation>
+          <p>
+            <strong>4. The bias gradient.</strong> Identically,{' '}
+            <M>{'\\partial z^{(l)}_j/\\partial b^{(l)}_j = 1'}</M>, so{' '}
+            <M>{'\\partial L/\\partial b^{(l)}_j = \\delta^{(l)}_j'}</M>.
+          </p>
+          <p>
+            Steps 3 and 4 are the reason the backward pass is cheap. Once{' '}
+            <M>{'\\delta^{(l)}'}</M> is known, every parameter gradient in layer{' '}
+            <M>{'l'}</M> is one multiplication — no further differentiation is needed. All the work
+            is in the recursion of step 2, and that recursion is shared by every weight in the
+            layer.
+          </p>
+        </Detail>
+
+        <Detail kicker="derivation" title="Why softmax with cross-entropy collapses to ŷ − y">
+          <p>
+            With <M>{'L = -\\sum_k y_k \\log p_k'}</M> and{' '}
+            <M>{'p = \\mathrm{softmax}(z)'}</M>, the two factors are{' '}
+            <M>{'\\partial L/\\partial p_k = -y_k/p_k'}</M> and the softmax Jacobian{' '}
+            <M>{'\\partial p_k/\\partial z_j = p_k(\\delta_{kj} - p_j)'}</M>. Multiply and sum:
+          </p>
+          <Equation plain>
+            {'\\frac{\\partial L}{\\partial z_j} = \\sum_k \\left(-\\frac{y_k}{p_k}\\right)p_k(\\delta_{kj}-p_j) = -\\sum_k y_k(\\delta_{kj}-p_j)'}
+          </Equation>
+          <p>
+            The <M>{'p_k'}</M> factors cancel exactly. Split the remaining sum:{' '}
+            <M>{'\\sum_k y_k\\delta_{kj} = y_j'}</M> and{' '}
+            <M>{'\\sum_k y_k p_j = p_j\\sum_k y_k = p_j'}</M> because the target sums to 1.
+            Therefore
+          </p>
+          <Equation plain>{'\\frac{\\partial L}{\\partial z_j} = p_j - y_j'}</Equation>
+          <p>
+            The same cancellation happens for a sigmoid with binary cross-entropy:{' '}
+            <M>{'\\partial L/\\partial \\hat{y} = (\\hat{y}-y)/(\\hat{y}(1-\\hat{y}))'}</M>{' '}
+            multiplied by <M>{"\\sigma'(z) = \\hat{y}(1-\\hat{y})"}</M> leaves{' '}
+            <M>{'\\hat{y} - y'}</M>.
+          </p>
+          <p>
+            This is not a coincidence of algebra. It happens because cross-entropy is the negative
+            log-likelihood of the distribution that the output activation parameterises — the pair is
+            matched, and the matched pair always produces the difference between prediction and
+            target. The practical consequences are a gradient that never saturates and an
+            implementation that needs no division, which is why the two are fused into one operation
+            in every framework.
+          </p>
+        </Detail>
+      </div>
 
       <div className="grid grid--side">
         <Panel
@@ -369,30 +474,44 @@ export function BackpropSection({ id, index }: SectionProps) {
             hint="click any edge in the diagram"
           >
             <Equation plain>{chainLatex}</Equation>
-            <div className="calc">
-              <div className="calc__line">
-                {chainNumbers.map((item) => item.label).join('  ×  ')}
-              </div>
-              <div className="calc__line">
-                {chainNumbers.map((item) => fmt(item.value, 4)).join('  ×  ')}
-              </div>
-              <div className="calc__line">
-                = <span className="calc__result">{fmt(chainProduct, 6)}</span>
-              </div>
-              <div className="calc__line">
-                <span className="calc__label">backprop gives </span>
-                {fmt(selectedGrad, 6)}
-              </div>
-              {numericCheck !== null ? (
-                <div className="calc__line">
-                  <span className="calc__label">finite diff.   </span>
-                  {fmt(numericCheck, 6)}
-                  <span className="calc__label">
-                    {'  '}|difference| = {fmt(Math.abs(numericCheck - selectedGrad), 9)}
-                  </span>
-                </div>
-              ) : null}
-            </div>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>factor</th>
+                  <th>value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chainNumbers.map((item) => (
+                  <tr key={item.label}>
+                    <td>{item.label}</td>
+                    <td>{fmt(item.value, 4)}</td>
+                  </tr>
+                ))}
+                <tr className="is-current">
+                  <td>product</td>
+                  <td>{fmt(chainProduct, 6)}</td>
+                </tr>
+                <tr>
+                  <td>backpropagation</td>
+                  <td>{fmt(selectedGrad, 6)}</td>
+                </tr>
+                {numericCheck !== null ? (
+                  <tr>
+                    <td>
+                      finite differences
+                      <br />
+                      <span className="faint">|difference|</span>
+                    </td>
+                    <td>
+                      {fmt(numericCheck, 6)}
+                      <br />
+                      <span className="faint">{fmt(Math.abs(numericCheck - selectedGrad), 9)}</span>
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
             <div className="btn-row" style={{ marginTop: 12 }}>
               <Button onClick={verify}>Check against finite differences</Button>
             </div>
@@ -417,32 +536,147 @@ export function BackpropSection({ id, index }: SectionProps) {
 
       <div className="grid grid--2">
         <div className="prose-block">
+          <h3 className="subhead">The algorithm</h3>
+          <Steps>
+            <li>
+              Run the forward pass, storing every <M>{'\\mathbf{z}^{(l)}'}</M> and{' '}
+              <M>{'\\mathbf{a}^{(l)}'}</M>.
+            </li>
+            <li>
+              Form <M>{'\\delta^{(L)}'}</M> at the output from{' '}
+              <M>{'\\partial L/\\partial \\hat{\\mathbf{y}}'}</M> and the output activation's
+              derivative.
+            </li>
+            <li>
+              For <M>{'l = L, L-1, \\ldots, 1'}</M>: record{' '}
+              <M>{'\\partial L/\\partial W^{(l)} = \\delta^{(l)}(\\mathbf{a}^{(l-1)})^{\\top}'}</M>{' '}
+              and <M>{'\\partial L/\\partial \\mathbf{b}^{(l)} = \\delta^{(l)}'}</M>, then
+              propagate{' '}
+              <M>{"\\delta^{(l-1)} = (W^{(l)})^{\\top}\\delta^{(l)} \\odot f'(\\mathbf{z}^{(l-1)})"}</M>.
+            </li>
+            <li>
+              Hand the collected gradients to the optimiser. Backpropagation computes derivatives;
+              it does not update anything.
+            </li>
+          </Steps>
+          <p>
+            That last point is worth separating. Backpropagation and gradient descent are often
+            spoken of together but are independent: backpropagation answers "what is the
+            derivative", the optimiser decides "what to do with it". Swapping SGD for Adam changes
+            step 4 and nothing else.
+          </p>
+
           <h3 className="subhead">Why work backwards</h3>
           <p>
-            A forward-mode derivative computes <M>{'\\partial \\hat{y} / \\partial \\theta_k'}</M>{' '}
-            for one parameter at a time, requiring one pass per parameter. Reverse mode computes{' '}
-            <M>{'\\partial L / \\partial \\theta_k'}</M> for all parameters in a single pass,
-            because the loss is a single scalar and the intermediate{' '}
-            <M>{'\\delta'}</M> values are shared by every weight in a layer.
+            Both directions compute exact derivatives; they differ in what a single pass produces.
+            Forward mode propagates <M>{'\\partial(\\cdot)/\\partial \\theta_k'}</M> for one
+            chosen input <M>{'\\theta_k'}</M>, so one pass gives the derivative of{' '}
+            <em>everything</em> with respect to <em>one</em> parameter. Reverse mode propagates{' '}
+            <M>{'\\partial L/\\partial(\\cdot)'}</M> for one chosen output, so one pass gives
+            the derivative of <em>one</em> scalar with respect to <em>everything</em>.
           </p>
           <p>
-            For a network with <M>{'P'}</M> parameters, forward mode costs <M>{'O(P)'}</M> passes
-            and reverse mode costs <M>{'O(1)'}</M>. With millions of parameters this difference is
-            what makes training feasible at all.
+            Training needs the second shape: one scalar loss, millions of parameters. With{' '}
+            <M>{'P'}</M> parameters, forward mode needs <M>{'P'}</M> passes and reverse mode needs
+            one, so reverse mode is <M>{'P'}</M> times cheaper.
           </p>
+          <Detail kicker="numbers" title="What that factor costs in practice">
+            <p>
+              Take a modest network with <M>{'P = 10^{6}'}</M> parameters and a forward pass that
+              takes 1 ms.
+            </p>
+            <ul>
+              <li>
+                <strong>Reverse mode:</strong> one forward pass plus a backward pass costing roughly
+                twice as much — about 3 ms per gradient.
+              </li>
+              <li>
+                <strong>Forward mode:</strong> <M>{'10^{6}'}</M> passes at 1 ms each — about 17
+                minutes per gradient.
+              </li>
+              <li>
+                <strong>Finite differences:</strong> two evaluations per parameter, so{' '}
+                <M>{'2\\times 10^{6}'}</M> passes — about 33 minutes per gradient, and the result
+                is only approximate.
+              </li>
+            </ul>
+            <p>
+              A single training run needs tens of thousands of gradients. At 3 ms that is a couple
+              of minutes; at 17 minutes it is several years. This factor is the reason neural
+              networks are trained at all, and it is why the finite-difference check in the panel
+              above is a test rather than a method.
+            </p>
+          </Detail>
         </div>
         <div className="prose-block">
           <h3 className="subhead">Where gradients vanish</h3>
           <p>
-            Each backward step through a layer multiplies by <M>{"f'(z)"}</M> and by{' '}
-            <M>{'W^{\\top}'}</M>. Tracing a path from the loss back to an early layer produces a
-            product of many such factors. If the typical factor is below 1 the product decays
-            geometrically with depth; if it is above 1 the product explodes.
+            Unrolling the recursion from the loss back to layer <M>{'l'}</M> gives a product of
+            matrices:
+          </p>
+          <Equation plain>
+            {"\\delta^{(l)} = \\left[\\prod_{k=l+1}^{L} D^{(k-1)}\\left(W^{(k)}\\right)^{\\top}\\right]\\delta^{(L)}, \\quad D^{(k)} = \\operatorname{diag}\\!\\left(f'(\\mathbf{z}^{(k)})\\right)"}
+          </Equation>
+          <p>
+            Taking norms and using{' '}
+            <M>{'\\lVert AB\\rVert \\le \\lVert A\\rVert\\lVert B\\rVert'}</M>:
+          </p>
+          <Equation plain>
+            {"\\lVert\\delta^{(l)}\\rVert \\le \\left(\\max_z |f'(z)| \\cdot \\max_k \\lVert W^{(k)}\\rVert_2\\right)^{L-l}\\lVert\\delta^{(L)}\\rVert"}
+          </Equation>
+          <p>
+            The bracket is a single number raised to the depth. Anything other than 1 compounds:
+          </p>
+          <table className="data" style={{ marginBottom: 14 }}>
+            <thead>
+              <tr>
+                <th>per-layer factor</th>
+                <th>after 10 layers</th>
+                <th>after 30 layers</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>0.25 (sigmoid, ‖W‖ = 1)</td>
+                <td>10⁻⁶</td>
+                <td>10⁻¹⁸</td>
+              </tr>
+              <tr>
+                <td>0.9</td>
+                <td>0.35</td>
+                <td>0.04</td>
+              </tr>
+              <tr>
+                <td>1.0</td>
+                <td>1</td>
+                <td>1</td>
+              </tr>
+              <tr>
+                <td>1.1</td>
+                <td>2.6</td>
+                <td>17</td>
+              </tr>
+              <tr>
+                <td>1.5</td>
+                <td>58</td>
+                <td>1.9 × 10⁵</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            A 32-bit float underflows to zero below about <M>{'10^{-38}'}</M>, so a sigmoid stack of
+            around 60 layers produces gradients that are not merely small but exactly zero. The
+            initialisation probe in section 03 measures this product directly.
           </p>
           <p>
-            Set the hidden activation to sigmoid in section 05 and note that{' '}
-            <M>{"\\sigma'(z) \\le 0.25"}</M>. Careful initialisation, ReLU-family activations,
-            normalisation layers and residual connections all exist to keep this product near 1.
+            Every standard remedy targets the same bracket. ReLU raises{' '}
+            <M>{"\\max|f'|"}</M> from 0.25 to 1. He initialisation sets{' '}
+            <M>{'\\lVert W\\rVert'}</M> so the product starts near 1. Normalisation layers reset
+            the scale at every layer rather than letting it drift. Residual connections add an
+            identity path, replacing the product{' '}
+            <M>{'\\prod D W^{\\top}'}</M> with <M>{'\\prod (I + DW^{\\top})'}</M>, which
+            contains a term equal to 1 no matter how small the rest becomes — which is why they
+            enable networks hundreds of layers deep.
           </p>
         </div>
       </div>

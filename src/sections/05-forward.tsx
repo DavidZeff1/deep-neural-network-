@@ -7,6 +7,7 @@ import { ACTIVATIONS, HIDDEN_ACTIVATIONS } from '../lib/activations.ts';
 import type { ActivationName } from '../lib/activations.ts';
 import { NetworkDiagram } from '../components/viz/NetworkDiagram.tsx';
 import { Panel, Note, Stats } from '../components/ui/layout.tsx';
+import { Detail, Steps } from '../components/ui/Detail.tsx';
 import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { fmt } from '../lib/format.ts';
@@ -328,12 +329,126 @@ export function ForwardSection({ id, index }: SectionProps) {
         </div>
       </div>
 
-      <Note title="Cost of a forward pass" accent>
+      <div className="grid grid--2">
+        <div className="prose-block">
+          <h3 className="subhead">The algorithm, stated once</h3>
+          <p>
+            Forward propagation is four lines. Everything else on this page is a consequence of
+            them.
+          </p>
+          <Steps>
+            <li>
+              Set <M>{'\\mathbf{a}^{(0)} = \\mathbf{x}'}</M>.
+            </li>
+            <li>
+              For <M>{'l = 1, \\ldots, L'}</M>: compute{' '}
+              <M>{'\\mathbf{z}^{(l)} = W^{(l)}\\mathbf{a}^{(l-1)} + \\mathbf{b}^{(l)}'}</M>.
+            </li>
+            <li>
+              Apply the activation: <M>{'\\mathbf{a}^{(l)} = f_l(\\mathbf{z}^{(l)})'}</M>, with{' '}
+              <M>{'f_L'}</M> the output activation.
+            </li>
+            <li>
+              Return <M>{'\\hat{\\mathbf{y}} = \\mathbf{a}^{(L)}'}</M>, and — if the result will
+              be trained on — keep every <M>{'\\mathbf{z}^{(l)}'}</M> and{' '}
+              <M>{'\\mathbf{a}^{(l)}'}</M>.
+            </li>
+          </Steps>
+          <p>
+            Step 4 is the one that is easy to miss. Backpropagation needs{' '}
+            <M>{'\\mathbf{a}^{(l-1)}'}</M> to form <M>{'\\partial L/\\partial W^{(l)}'}</M> and{' '}
+            <M>{'\\mathbf{z}^{(l)}'}</M> to evaluate <M>{"f'"}</M>. Recomputing them would double
+            the work, so they are stored instead. This is the entire reason training uses more
+            memory than inference, and the reason a batch that fits at inference time may not fit
+            during training.
+          </p>
+
+          <Detail title="Memory held by the forward pass">
+            <p>
+              For a batch of <M>{'m'}</M> examples, layer <M>{'l'}</M> holds{' '}
+              <M>{'m\\,n_l'}</M> pre-activations and <M>{'m\\,n_l'}</M> activations, so the total
+              retained is <M>{'2m\\sum_{l} n_l'}</M> numbers, on top of the{' '}
+              <M>{'\\sum_l (n_l n_{l-1} + n_l)'}</M> parameters and an equal number of gradient
+              slots.
+            </p>
+            <p>
+              Take a network with ten hidden layers of 1024 units, a batch of 128, and 32-bit
+              floats. Activations: <M>{'2 \\times 128 \\times 10 \\times 1024 \\times 4'}</M>{' '}
+              bytes <M>{'\\approx 10.5'}</M> MB. Parameters: about 9.4 million weights at 4 bytes
+              each <M>{'\\approx 38'}</M> MB, plus the same again for the gradients. Doubling the
+              batch doubles the activation term and leaves the parameter terms unchanged — which is
+              why activation memory dominates at large batch sizes and parameter memory dominates at
+              small ones.
+            </p>
+            <p>
+              Gradient checkpointing trades one against the other: store only every{' '}
+              <M>{'k'}</M>-th layer's activations and recompute the rest during the backward pass.
+              Memory falls by roughly a factor of <M>{'k'}</M>, compute rises by roughly one extra
+              forward pass.
+            </p>
+          </Detail>
+        </div>
+
+        <div className="prose-block">
+          <h3 className="subhead">Batching, concretely</h3>
+          <p>
+            With the network above (2 → 3 → 1) and a batch of four examples, the shapes are:
+          </p>
+          <Equation plain>
+            {'\\underbrace{Z^{(1)}}_{3\\times 4} = \\underbrace{W^{(1)}}_{3\\times 2}\\underbrace{X}_{2\\times 4} + \\underbrace{\\mathbf{b}^{(1)}}_{3\\times 1}'}
+          </Equation>
+          <p>
+            The bias has three entries but the result has twelve. The addition is a broadcast: the
+            single column <M>{'\\mathbf{b}^{(1)}'}</M> is added to each of the four columns of the
+            product. Written out, <M>{'Z^{(1)}_{jk} = \\sum_i W^{(1)}_{ji}X_{ik} + b^{(1)}_j'}</M> —
+            the bias index does not involve <M>{'k'}</M>.
+          </p>
+          <p>
+            The parameters are shared across the batch and the batch dimension is independent:
+            column <M>{'k'}</M> of the output depends only on column <M>{'k'}</M> of the input. That
+            is what makes batching a pure efficiency win. It changes nothing about the function,
+            only how many examples are evaluated per matrix multiplication — and one large matrix
+            product uses hardware far better than many small ones.
+          </p>
+          <p>
+            Some layers break that independence deliberately. Batch normalisation computes each
+            unit's mean and variance across the batch, so its output for one example depends on the
+            others in the same batch. That is why such layers behave differently at training and
+            evaluation time, and why the batch size becomes part of the model rather than only part
+            of the optimiser.
+          </p>
+
+          <h3 className="subhead">Counting the work</h3>
+          <p>
+            Layer <M>{'l'}</M> performs one multiply and one add per weight, per example:{' '}
+            <M>{'2\\,m\\,n_l n_{l-1}'}</M> floating-point operations, plus{' '}
+            <M>{'m\\,n_l'}</M> for the bias and roughly <M>{'m\\,n_l'}</M> for the activation. The
+            weight term dominates as soon as the layers are more than a few units wide, so the cost
+            of a forward pass is <M>{'\\Theta(m \\sum_l n_l n_{l-1})'}</M> — the same order as the
+            parameter count, times the batch size.
+          </p>
+          <p>
+            For the 2 → 3 → 1 network above: <M>{'2\\cdot 3 = 6'}</M> multiply-adds in layer 1 and{' '}
+            <M>{'3\\cdot 1 = 3'}</M> in layer 2, so 9 per example, about 18 FLOPs. Backpropagation
+            costs roughly twice that, because it computes both{' '}
+            <M>{'\\partial L/\\partial W'}</M> and the gradient passed to the previous layer.
+          </p>
+        </div>
+      </div>
+
+      <Note title="Forward propagation is deterministic — with two exceptions" accent>
         <p>
-          Layer <M>{'l'}</M> performs <M>{'n_l \\, n_{l-1}'}</M> multiply-adds. For the network
-          above that is 2·3 + 3·1 = 9 multiplications per example. Forward propagation is
-          <M>{'\;O(\\sum_l n_l n_{l-1})'}</M>, the same order as the number of parameters, and
-          backpropagation costs roughly twice as much.
+          Given the parameters and the input, the output is fixed. Two mechanisms break that
+          deliberately, and both are active only during training: dropout multiplies hidden
+          activations by a random mask, and batch normalisation makes the output depend on the other
+          examples in the batch. Both switch off at evaluation time — dropout stops masking, batch
+          normalisation uses running statistics instead of batch statistics.
+        </p>
+        <p>
+          This is why frameworks have an explicit <code>train</code> / <code>eval</code> mode, and
+          why forgetting to switch is a common source of a validation score that is quietly wrong.
+          The forward pass in section 09 and beyond applies dropout when training and not when
+          reporting metrics, for the same reason.
         </p>
       </Note>
     </Section>

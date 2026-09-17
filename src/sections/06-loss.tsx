@@ -5,6 +5,7 @@ import { LOSSES } from '../lib/losses.ts';
 import type { LossName } from '../lib/losses.ts';
 import { softmax } from '../lib/activations.ts';
 import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
+import { Detail } from '../components/ui/Detail.tsx';
 import { Segmented, Slider, Button } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { Curve, Marker, Plot } from '../components/viz/Plot.tsx';
@@ -345,6 +346,51 @@ export function LossSection({ id, index }: SectionProps) {
         {'J(\\theta) = \\frac{1}{m}\\sum_{i=1}^{m} L\\!\\left(\\hat{y}^{(i)}, y^{(i)}\\right)'}
       </Equation>
 
+      <div className="prose-block">
+        <p>
+          The average, rather than the sum, is what makes the objective comparable across datasets
+          of different sizes and keeps the gradient magnitude — and therefore the appropriate
+          learning rate — independent of how many examples there are. A sum would make the same
+          learning rate behave completely differently on 100 and on 100 000 examples.
+        </p>
+        <p>
+          The losses below are not arbitrary choices of "distance". Each is the negative
+          log-likelihood of a specific probabilistic model of the target, which is where their
+          particular forms come from and why they pair with particular output activations.
+        </p>
+      </div>
+
+      <Detail kicker="derivation" title="Cross-entropy is the negative log-likelihood of a Bernoulli model">
+        <p>
+          Model the label as a Bernoulli random variable whose parameter is the network's output:{' '}
+          <M>{'y \\mid \\mathbf{x} \\sim \\text{Bernoulli}(\\hat{y})'}</M>. The probability
+          of observing the label <M>{'y \\in \\{0,1\\}'}</M> can be written in one expression:
+        </p>
+        <Equation plain>{'P(y \\mid \\mathbf{x}) = \\hat{y}^{\\,y}(1-\\hat{y})^{\\,1-y}'}</Equation>
+        <p>
+          Check both cases: at <M>{'y = 1'}</M> this is <M>{'\\hat{y}'}</M>, at{' '}
+          <M>{'y = 0'}</M> it is <M>{'1 - \\hat{y}'}</M>. Assuming the examples are independent,
+          the likelihood of the whole dataset is the product, and maximising it is the same as
+          maximising its logarithm:
+        </p>
+        <Equation plain>
+          {'\\log \\prod_{i} P(y^{(i)} \\mid \\mathbf{x}^{(i)}) = \\sum_i \\Bigl[ y^{(i)}\\log\\hat{y}^{(i)} + (1-y^{(i)})\\log(1-\\hat{y}^{(i)}) \\Bigr]'}
+        </Equation>
+        <p>
+          Negate and divide by <M>{'m'}</M> to turn maximisation into minimisation and a sum into an
+          average, and the result is exactly binary cross-entropy. The same argument with a
+          categorical distribution over <M>{'K'}</M> outcomes gives categorical cross-entropy, and
+          with a Gaussian of fixed variance it gives mean squared error:{' '}
+          <M>{'-\\log \\mathcal{N}(y; \\hat{y}, \\sigma^2) = \\frac{(\\hat{y}-y)^2}{2\\sigma^2} + \\text{const}'}</M>.
+        </p>
+        <p>
+          This is the reason the pairings are what they are. MSE assumes additive Gaussian noise on
+          a real-valued target; cross-entropy assumes a categorical outcome. Using MSE on a
+          classification problem is not just empirically worse — it is fitting the wrong noise
+          model, and the flat gradient seen in the table below is the symptom.
+        </p>
+      </Detail>
+
       <Segmented
         value={tab}
         options={[
@@ -413,13 +459,114 @@ export function LossSection({ id, index }: SectionProps) {
         </Panel>
       </div>
 
+      <div className="grid grid--2">
+        <div className="prose-block">
+          <h3 className="subhead">Reading a loss value</h3>
+          <p>
+            A loss is only interpretable against a baseline. For cross-entropy the natural one is
+            the constant predictor that always outputs the class frequencies. On a balanced binary
+            problem that predictor outputs 0.5 and scores{' '}
+            <M>{'-\\ln 0.5 = 0.693'}</M> nats; on <M>{'K'}</M> balanced classes it scores{' '}
+            <M>{'\\ln K'}</M>. A model at or above that number has learned nothing usable.
+          </p>
+          <table className="data" style={{ marginBottom: 14 }}>
+            <thead>
+              <tr>
+                <th>Situation</th>
+                <th>BCE (nats)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Always right, fully confident</td>
+                <td>0</td>
+              </tr>
+              <tr>
+                <td>Right at ŷ = 0.9</td>
+                <td>0.105</td>
+              </tr>
+              <tr>
+                <td>Balanced coin flip</td>
+                <td>0.693</td>
+              </tr>
+              <tr>
+                <td>Wrong at ŷ = 0.1</td>
+                <td>2.303</td>
+              </tr>
+              <tr>
+                <td>Wrong at ŷ = 0.01</td>
+                <td>4.605</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            The asymmetry matters. One confidently wrong prediction at{' '}
+            <M>{'\\hat{y} = 0.01'}</M> costs as much as 44 correct predictions at{' '}
+            <M>{'\\hat{y} = 0.9'}</M>. Cross-entropy is dominated by its worst predictions, which
+            is usually the behaviour you want — and occasionally is not, when a few mislabelled
+            examples can dominate the objective.
+          </p>
+
+          <h3 className="subhead">Class imbalance</h3>
+          <p>
+            If 99% of the labels are 0, the constant predictor <M>{'\\hat{y} = 0.01'}</M> reaches a
+            loss of <M>{'-0.99\\ln 0.99 - 0.01\\ln 0.01 = 0.056'}</M> nats and 99% accuracy while
+            being useless. Two standard responses: weight each example by the inverse frequency of
+            its class, so the rare class contributes equally to the objective; or resample the data
+            so the classes are balanced. Both change the objective being minimised, so both change
+            what "optimal" means — deliberately.
+          </p>
+        </div>
+
+        <div className="prose-block">
+          <h3 className="subhead">Where the loss is convex and where it is not</h3>
+          <p>
+            Binary cross-entropy composed with a sigmoid is convex in the logit <M>{'z'}</M>. Its
+            second derivative is
+          </p>
+          <Equation plain>
+            {'\\frac{\\partial^2 L}{\\partial z^2} = \\hat{y}(1-\\hat{y}) > 0'}
+          </Equation>
+          <p>
+            so for a model with no hidden layers — logistic regression — the objective is convex in
+            the parameters and has a single global minimum. MSE composed with a sigmoid is not
+            convex even in that case, which is a second, independent reason to prefer cross-entropy
+            for classification.
+          </p>
+          <p>
+            Once hidden layers are added, neither loss is convex in the parameters. The composition{' '}
+            <M>{'z^{(2)} = W^{(2)}f(W^{(1)}\\mathbf{x})'}</M> is not a convex function of{' '}
+            <M>{'(W^{(1)}, W^{(2)})'}</M> jointly, and section 03 showed the permutation symmetry
+            that guarantees many equivalent minima. Convexity of the loss in the output is still
+            useful — it is what makes the output layer's gradient well behaved — but it says nothing
+            about the shape of the surface the optimiser actually walks on.
+          </p>
+
+          <h3 className="subhead">Loss and metric are different objects</h3>
+          <p>
+            The loss is what gradient descent minimises; it must be differentiable. The metric is
+            what the result is judged by; it need not be. Accuracy, precision, recall, F1 and AUC
+            are all step functions of the parameters with zero gradient almost everywhere, so none
+            of them can be optimised directly by gradient descent.
+          </p>
+          <p>
+            Cross-entropy is used as a differentiable stand-in: lowering it generally raises
+            accuracy, but the relationship is not monotone. A model can become more accurate while
+            its loss rises, if it fixes a few borderline cases and becomes more confidently wrong on
+            others. Watching both curves in section 09 makes the divergence visible.
+          </p>
+        </div>
+      </div>
+
       <Note title="Units and interpretation" accent>
         <p>
-          Cross-entropy measured with natural logarithms is in nats. A loss of{' '}
-          <M>{'\\ln 2 \\approx 0.693'}</M> on a balanced binary problem means the model is no better
-          than a coin flip; <M>{'\\ln K'}</M> is the equivalent baseline for <M>{'K'}</M> classes.
-          Reporting <M>{'e^{L}'}</M> gives the effective number of classes the model is still
-          undecided between.
+          Cross-entropy measured with natural logarithms is in nats; with base-2 logarithms it is in
+          bits, and the two differ by a factor of <M>{'\\ln 2'}</M>. A loss of{' '}
+          <M>{'\\ln 2 \\approx 0.693'}</M> nats on a balanced binary problem means the model is no
+          better than a coin flip; <M>{'\\ln K'}</M> is the equivalent baseline for{' '}
+          <M>{'K'}</M> classes. Reporting <M>{'e^{L}'}</M> — the perplexity — gives the effective
+          number of classes the model is still undecided between: a perplexity of 1 is certainty, a
+          perplexity of <M>{'K'}</M> is no information at all.
         </p>
       </Note>
     </Section>
