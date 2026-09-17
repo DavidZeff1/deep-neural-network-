@@ -5,7 +5,7 @@ import { LOSSES } from '../lib/losses.ts';
 import type { LossName } from '../lib/losses.ts';
 import { softmax } from '../lib/activations.ts';
 import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
-import { Detail } from '../components/ui/Detail.tsx';
+import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Segmented, Slider, Button } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { Curve, Marker, Plot } from '../components/viz/Plot.tsx';
@@ -345,6 +345,18 @@ export function LossSection({ id, index }: SectionProps) {
       <Equation caption="The objective: the mean loss over m training examples, as a function of the parameters θ = {W, b}.">
         {'J(\\theta) = \\frac{1}{m}\\sum_{i=1}^{m} L\\!\\left(\\hat{y}^{(i)}, y^{(i)}\\right)'}
       </Equation>
+      <InWords>
+        <p>
+          Score every training example by how wrong the prediction was, add the scores up, divide by
+          the number of examples. That average is the single number training tries to make small.
+        </p>
+        <p>
+          The superscript <M>{'(i)'}</M> indexes the example, so{' '}
+          <M>{'\\hat{y}^{(3)}'}</M> is the prediction for the third one.{' '}
+          <M>{'\\theta'}</M> stands for all the weights and biases at once — writing them out
+          individually would take a page.
+        </p>
+      </InWords>
 
       <div className="prose-block">
         <p>
@@ -367,6 +379,15 @@ export function LossSection({ id, index }: SectionProps) {
           of observing the label <M>{'y \\in \\{0,1\\}'}</M> can be written in one expression:
         </p>
         <Equation plain>{'P(y \\mid \\mathbf{x}) = \\hat{y}^{\\,y}(1-\\hat{y})^{\\,1-y}'}</Equation>
+        <InWords tag="reading it">
+          <p>
+            <M>{'P(y \\mid \\mathbf{x})'}</M> means "the probability of the label being{' '}
+            <M>{'y'}</M>, given the input <M>{'\\mathbf{x}'}</M>". The trick in the formula is that
+            the exponents switch the two cases on and off: when <M>{'y = 1'}</M> the second factor
+            becomes <M>{'(1-\\hat{y})^0 = 1'}</M> and disappears, and when{' '}
+            <M>{'y = 0'}</M> the first factor disappears the same way.
+          </p>
+        </InWords>
         <p>
           Check both cases: at <M>{'y = 1'}</M> this is <M>{'\\hat{y}'}</M>, at{' '}
           <M>{'y = 0'}</M> it is <M>{'1 - \\hat{y}'}</M>. Assuming the examples are independent,

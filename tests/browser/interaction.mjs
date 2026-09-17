@@ -58,6 +58,77 @@ async function stat(root, label) {
 
 const num = (text) => Number(String(text).replace(/−/g, '-').replace(/[^\d.eE+-]/g, ''));
 
+// --- 00 notation ------------------------------------------------------------
+{
+  const s = section('notation');
+  await s.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+
+  // Sigma: the running total must equal the sum of the listed products.
+  const sumPanel = s.locator('.panel', { hasText: 'Adding up a list of products' });
+  const rows = await sumPanel.locator('table.data tbody tr').count();
+  check('00 sigma table has one row per term', rows === 3, `${rows} rows`);
+  const productCells = await sumPanel.locator('table.data tbody tr td:nth-child(4)').allInnerTexts();
+  const totalCell = await sumPanel.locator('table.data tbody tr:last-child td:last-child').innerText();
+  const sumOfProducts = productCells.map(num).reduce((a, b) => a + b, 0);
+  check('00 running total equals the sum of the products', Math.abs(sumOfProducts - num(totalCell)) < 1e-9, `${sumOfProducts} vs ${totalCell}`);
+  // (0.5)(4) + (-1.2)(3) + (2.0)(2) = 2 - 3.6 + 4 = 2.4
+  check('00 sigma example computes 2.4', Math.abs(num(totalCell) - 2.4) < 1e-9, totalCell);
+
+  await setRange(slider(s.locator('.panel', { hasText: 'How many terms' }), 'n —'), 5);
+  const rows5 = await sumPanel.locator('table.data tbody tr').count();
+  check('00 changing n changes the number of terms', rows5 === 5, `${rows5} rows`);
+  await setRange(slider(s.locator('.panel', { hasText: 'How many terms' }), 'n —'), 3);
+
+  // Matrix times vector: stepping reveals one row at a time, with correct values.
+  const mv = s.locator('.panel', { hasText: 'A matrix multiplied by a vector' });
+  await mv.getByRole('button', { name: 'Show all' }).click();
+  await page.waitForTimeout(200);
+  const mvText = await mv.innerText();
+  // W = [[0.5,-1],[2,0.5],[-0.5,1.5]], x = [4,2] -> [0, 9, 1]
+  check('00 matrix-vector product is correct', /0\.0/.test(mvText) && /9\.0/.test(mvText) && /1\.0/.test(mvText), 'expected 0.0, 9.0, 1.0');
+  await mv.getByRole('button', { name: 'Reset' }).click();
+  await page.waitForTimeout(150);
+  const hidden = await mv.innerText();
+  check('00 results start hidden', hidden.includes('?'), 'question marks shown before stepping');
+
+  // Derivative: shrinking h must bring rise/run towards the exact slope.
+  const slopePanel = s.locator('.panel', { hasText: 'The arithmetic' });
+  const slopeControls = s.locator('.panel', { hasText: 'Controls' }).first();
+  // The readout renders labels and values as separate grid cells.
+  const readValue = async (label) => {
+    const labels = await slopePanel.locator('.readout__label').allInnerTexts();
+    const values = await slopePanel.locator('.readout__value').allInnerTexts();
+    const index = labels.findIndex((l) => l.trim() === label);
+    return index === -1 ? Number.NaN : num(values[index]);
+  };
+  await setRange(slider(slopeControls, 'x — where on the curve'), 1);
+  await setRange(slider(slopeControls, 'h — how far you nudge'), 0.3);
+  const coarse = Math.abs(await readValue('difference'));
+  await setRange(slider(slopeControls, 'h — how far you nudge'), -3);
+  const fine = Math.abs(await readValue('difference'));
+  check('00 a smaller nudge approximates the derivative better', fine < coarse / 100, `${coarse} -> ${fine}`);
+  const exact = await readValue("exact slope f'(x)");
+  check('00 derivative of x² at x = 1 is 2', Math.abs(exact - 2) < 1e-9, `${exact}`);
+
+  // Chain rule: the product of the three rates must match the measured change.
+  const chain = s.locator('.panel', { hasText: 'The rate at each step' });
+  const chainRow = async (label) =>
+    num(
+      await chain
+        .locator('tr', { has: page.locator('td', { hasText: label }) })
+        .first()
+        .locator('td')
+        .nth(2)
+        .innerText(),
+    );
+  const viaChainRule = await chainRow('all three multiplied');
+  const viaNudging = await chainRow('measured by nudging');
+  check('00 chain rule matches a direct measurement', Math.abs(viaChainRule - viaNudging) < 1e-3, `${viaChainRule} vs ${viaNudging}`);
+  const rateZ = await chainRow('x changes z');
+  check('00 the first rate equals the weight', Math.abs(rateZ - 0.8) < 1e-9, `${rateZ}`);
+}
+
 // --- 01 structure -----------------------------------------------------------
 {
   const s = section('structure');

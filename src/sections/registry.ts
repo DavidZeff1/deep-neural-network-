@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import { NotationSection } from './00-notation.tsx';
 import { StructureSection } from './01-structure.tsx';
 import { NeuronsSection } from './02-neurons.tsx';
 import { WeightsSection } from './03-weights.tsx';
@@ -20,20 +21,23 @@ export interface SectionProps {
 export interface SectionEntry {
   id: string;
   title: string;
+  /** Displayed in the navigation; the prerequisites section is 00. */
+  number: string;
   component: ComponentType<SectionProps>;
 }
 
 export const SECTIONS: SectionEntry[] = [
-  { id: 'structure', title: 'Network structure', component: StructureSection },
-  { id: 'neurons', title: 'Neurons', component: NeuronsSection },
-  { id: 'weights', title: 'Weights & biases', component: WeightsSection },
-  { id: 'activations', title: 'Activation functions', component: ActivationsSection },
-  { id: 'forward', title: 'Forward propagation', component: ForwardSection },
-  { id: 'loss', title: 'Loss functions', component: LossSection },
-  { id: 'gradient-descent', title: 'Gradient descent', component: GradientDescentSection },
-  { id: 'backprop', title: 'Backpropagation', component: BackpropSection },
-  { id: 'training', title: 'Training', component: TrainingSection },
-  { id: 'overfitting', title: 'Overfitting & regularisation', component: OverfittingSection },
-  { id: 'depth', title: 'Why depth matters', component: DepthSection },
-  { id: 'playground', title: 'Playground', component: PlaygroundSection },
+  { id: 'notation', title: 'Reading the mathematics', number: '00', component: NotationSection },
+  { id: 'structure', title: 'Network structure', number: '01', component: StructureSection },
+  { id: 'neurons', number: '02', title: 'Neurons', component: NeuronsSection },
+  { id: 'weights', number: '03', title: 'Weights & biases', component: WeightsSection },
+  { id: 'activations', number: '04', title: 'Activation functions', component: ActivationsSection },
+  { id: 'forward', number: '05', title: 'Forward propagation', component: ForwardSection },
+  { id: 'loss', number: '06', title: 'Loss functions', component: LossSection },
+  { id: 'gradient-descent', number: '07', title: 'Gradient descent', component: GradientDescentSection },
+  { id: 'backprop', number: '08', title: 'Backpropagation', component: BackpropSection },
+  { id: 'training', number: '09', title: 'Training', component: TrainingSection },
+  { id: 'overfitting', number: '10', title: 'Overfitting & regularisation', component: OverfittingSection },
+  { id: 'depth', number: '11', title: 'Why depth matters', component: DepthSection },
+  { id: 'playground', number: '12', title: 'Playground', component: PlaygroundSection },
 ];

@@ -4,7 +4,7 @@ import type { SectionProps } from './registry.ts';
 import { ACTIVATIONS, softmax } from '../lib/activations.ts';
 import type { ActivationName } from '../lib/activations.ts';
 import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
-import { Detail } from '../components/ui/Detail.tsx';
+import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Segmented, Slider, Button } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { Curve, Marker, Plot } from '../components/viz/Plot.tsx';
@@ -353,6 +353,18 @@ export function ActivationsSection({ id, index }: SectionProps) {
           <Equation>
             {"\\frac{\\partial L}{\\partial \\mathbf{a}^{(0)}} \\propto \\prod_{l=1}^{L} f'\\!\\left(z^{(l)}\\right) \\cdot W^{(l)}"}
           </Equation>
+          <InWords>
+            <p>
+              <M>{'\\prod'}</M> means multiply the terms together, the way{' '}
+              <M>{'\\sum'}</M> means add them. So this says: the influence an early layer has on
+              the final error is the product of one factor per layer in between.
+            </p>
+            <p>
+              That is the chain rule from section 00 applied <M>{'L'}</M> times. If each factor is a
+              bit less than 1, multiplying many of them together drives the whole product towards
+              zero — and then the early layers stop learning.
+            </p>
+          </InWords>
           <p>
             With sigmoid, <M>{"f'(z) \\le 0.25"}</M> everywhere. Ten such layers contribute a factor
             of at most <M>{'0.25^{10} \\approx 10^{-6}'}</M>, so the early layers receive almost no
@@ -469,6 +481,18 @@ export function ActivationsSection({ id, index }: SectionProps) {
       <Equation caption="Exponentiation makes every entry positive; dividing by the sum makes them add to 1.">
         {'\\mathrm{softmax}(\\mathbf{z})_k = \\frac{e^{z_k}}{\\sum_{j=1}^{K} e^{z_j}}'}
       </Equation>
+      <InWords>
+        <p>
+          Two steps. First raise <M>{'e \\approx 2.718'}</M> to the power of each number, which
+          turns any value — including negative ones — into a positive one, and exaggerates the
+          differences between them. Then divide each result by the total of all of them, which
+          forces the final numbers to add up to exactly 1.
+        </p>
+        <p>
+          Numbers that are positive and add to 1 can be read as probabilities, which is the whole
+          point: the network's raw outputs become "how likely is each class".
+        </p>
+      </InWords>
 
       <SoftmaxPanel />
 

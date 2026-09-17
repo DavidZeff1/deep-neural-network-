@@ -70,9 +70,14 @@ export function Hero({ onStart }: { onStart: () => void }) {
             finite differences, and training runs in your browser. Change a parameter and the
             numbers next to it change with it.
           </p>
+          <p>
+            No mathematical background is assumed. Section 00 introduces every symbol the course
+            uses — sums, vectors, derivatives and the chain rule — with something you can move for
+            each one. Skip it if those are already familiar.
+          </p>
           <div className="btn-row" style={{ marginTop: 20 }}>
             <Button variant="primary" onClick={onStart}>
-              Start with network structure
+              Start from the beginning
             </Button>
           </div>
           <div className="row" style={{ marginTop: 22, gap: 18 }}>

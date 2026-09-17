@@ -12,7 +12,7 @@ import { DecisionBoundary } from '../components/viz/DecisionBoundary.tsx';
 import { MetricChart } from '../components/viz/MetricChart.tsx';
 import { ArchitectureControls } from '../components/ui/ArchitectureControls.tsx';
 import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
-import { Detail, Steps } from '../components/ui/Detail.tsx';
+import { Detail, InWords, Steps } from '../components/ui/Detail.tsx';
 import { Button, SelectField, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { fmt, fmtPercent } from '../lib/format.ts';
@@ -112,6 +112,19 @@ export function TrainingSection({ id, index }: SectionProps) {
       <Equation caption="B is the batch size. Each update uses the average gradient over the batch.">
         {'\\theta \\leftarrow \\theta - \\eta \\cdot \\frac{1}{B}\\sum_{i \\in \\mathcal{B}} \\nabla_{\\theta} L\\!\\left(\\hat{y}^{(i)}, y^{(i)}\\right)'}
       </Equation>
+      <InWords>
+        <p>
+          Take a handful of training examples — that handful is called a batch, and{' '}
+          <M>{'i \\in \\mathcal{B}'}</M> means "for each example <M>{'i'}</M> in it". Work out the
+          gradient for each one, average them, and take one gradient-descent step using that average.
+        </p>
+        <p>
+          Why average rather than use one example? One example's gradient points towards fitting that
+          example, which is a noisy guess at what would help overall. Averaging a few cancels most of
+          the noise. Why not use all of them? Because that costs a full pass over the dataset for a
+          single step.
+        </p>
+      </InWords>
 
       <div className="grid grid--side">
         <div className="stack">
@@ -307,6 +320,18 @@ export function TrainingSection({ id, index }: SectionProps) {
             <Equation plain>
               {'\\operatorname{Var}(\\bar{g}_{\\mathcal{B}}) = \\frac{1}{B^2}\\sum_{i\\in\\mathcal{B}}\\operatorname{Var}(g_i) = \\frac{\\Sigma}{B}'}
             </Equation>
+            <InWords tag="the two steps">
+              <p>
+                First step: dividing by <M>{'B'}</M> divides the spread by{' '}
+                <M>{'B'}</M> squared, because scaling a quantity by <M>{'c'}</M> scales its variance
+                by <M>{'c^2'}</M> (section 00).
+              </p>
+              <p>
+                Second step: the <M>{'B'}</M> independent examples each contribute the same amount of
+                spread <M>{'\\Sigma'}</M>, and independent contributions add, so the sum is{' '}
+                <M>{'B\\Sigma'}</M>. Combining, <M>{'B\\Sigma / B^2 = \\Sigma/B'}</M>.
+              </p>
+            </InWords>
             <p>
               where <M>{'\\Sigma'}</M> is the per-example gradient covariance. The standard
               deviation is therefore <M>{'\\sqrt{\\Sigma/B}'}</M>, proportional to{' '}

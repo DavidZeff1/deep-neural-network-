@@ -6,7 +6,7 @@ import { useMutableNetwork } from '../hooks/useMutableNetwork.ts';
 import { ACTIVATIONS } from '../lib/activations.ts';
 import { NetworkDiagram } from '../components/viz/NetworkDiagram.tsx';
 import { Panel, Note, Stats } from '../components/ui/layout.tsx';
-import { Detail, Steps } from '../components/ui/Detail.tsx';
+import { Detail, InWords, Steps } from '../components/ui/Detail.tsx';
 import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { fmt, sub } from '../lib/format.ts';
@@ -190,12 +190,48 @@ export function BackpropSection({ id, index }: SectionProps) {
         </>
       }
     >
+      <InWords tag="the idea">
+        <p>
+          Section 00 showed that when a change travels through several steps, you multiply the rate
+          of each step. A network is exactly that: a weight changes its unit's total, which changes
+          that unit's output, which changes every unit in the next layer, and so on until it changes
+          the error.
+        </p>
+        <p>
+          Computing that product separately for every weight would repeat almost all the work, since
+          weights in the same layer share most of their path to the error. Backpropagation computes
+          the shared part once, starting at the error and working backwards, and then each weight's
+          gradient is one extra multiplication.
+        </p>
+        <p>
+          The shared part has a name: <M>{'\\delta'}</M>, one number per unit, meaning "how much
+          the error changes if this unit's total changes".
+        </p>
+      </InWords>
+
       <Equation caption="δ is the gradient with respect to a layer's pre-activations. Everything else follows from it.">
         {'\\delta^{(L)} = \\frac{\\partial L}{\\partial \\mathbf{z}^{(L)}}, \\qquad \\delta^{(l)} = \\left(W^{(l+1)}\\right)^{\\!\\top}\\delta^{(l+1)} \\odot f\'\\!\\left(\\mathbf{z}^{(l)}\\right)'}
       </Equation>
       <Equation caption="The parameter gradients are outer products of δ with the incoming activations.">
         {'\\frac{\\partial L}{\\partial W^{(l)}} = \\delta^{(l)} \\left(\\mathbf{a}^{(l-1)}\\right)^{\\!\\top}, \\qquad \\frac{\\partial L}{\\partial \\mathbf{b}^{(l)}} = \\delta^{(l)}'}
       </Equation>
+      <InWords>
+        <p>
+          The first equation says: to get <M>{'\\delta'}</M> for a layer, take the{' '}
+          <M>{'\\delta'}</M> values of the layer <em>after</em> it, send them backwards through the
+          same weights that carried the signal forwards (that is what the transpose does), and then
+          scale each one by how responsive that unit's activation function was at its current value.
+        </p>
+        <p>
+          The second says: once you know a unit's <M>{'\\delta'}</M>, the gradient of any weight
+          feeding into it is just <M>{'\\delta'}</M> times the activation that weight multiplied.
+          One multiplication per weight — no further calculus.
+        </p>
+        <p>
+          The bias gradient is <M>{'\\delta'}</M> itself, because a bias is added directly with no
+          input to multiply by.
+        </p>
+      </InWords>
 
       <div className="prose-block">
         <Detail kicker="derivation" title="Deriving the four equations from the chain rule">
@@ -617,6 +653,18 @@ export function BackpropSection({ id, index }: SectionProps) {
           <Equation plain>
             {"\\delta^{(l)} = \\left[\\prod_{k=l+1}^{L} D^{(k-1)}\\left(W^{(k)}\\right)^{\\top}\\right]\\delta^{(L)}, \\quad D^{(k)} = \\operatorname{diag}\\!\\left(f'(\\mathbf{z}^{(k)})\\right)"}
           </Equation>
+          <InWords>
+            <p>
+              Applying the recursion once takes you back one layer. Applying it repeatedly takes you
+              from the output all the way to layer <M>{'l'}</M>, and each application contributes two
+              factors: the weights, and the activation slopes.
+            </p>
+            <p>
+              So the gradient reaching an early layer is the gradient at the output multiplied by one
+              number-ish factor per layer in between. That is the same "multiply the rates" rule from
+              section 00, just applied many times.
+            </p>
+          </InWords>
           <p>
             Taking norms and using{' '}
             <M>{'\\lVert AB\\rVert \\le \\lVert A\\rVert\\lVert B\\rVert'}</M>:

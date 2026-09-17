@@ -13,6 +13,7 @@ export function App() {
   const activeIndex = SECTIONS.findIndex((section) => section.id === activeId);
   const progress = activeIndex < 0 ? 0 : ((activeIndex + 1) / SECTIONS.length) * 100;
   const activeTitle = activeIndex < 0 ? 'Introduction' : SECTIONS[activeIndex].title;
+  const activeNumber = activeIndex < 0 ? '—' : SECTIONS[activeIndex].number;
 
   const goTo = useCallback((id: string) => {
     setNavOpen(false);
@@ -44,7 +45,7 @@ export function App() {
             <span className="navitem__index">—</span>
             <span>Introduction</span>
           </button>
-          {SECTIONS.map((section, index) => (
+          {SECTIONS.map((section) => (
             <button
               key={section.id}
               type="button"
@@ -52,14 +53,14 @@ export function App() {
               onClick={() => goTo(section.id)}
               aria-current={activeId === section.id ? 'true' : undefined}
             >
-              <span className="navitem__index">{String(index + 1).padStart(2, '0')}</span>
+              <span className="navitem__index">{section.number}</span>
               <span>{section.title}</span>
             </button>
           ))}
         </nav>
         <div className="sidebar__foot">
           <span className="progress__label">
-            {String(Math.max(activeIndex + 1, 0)).padStart(2, '0')}/{SECTIONS.length}
+            {activeNumber}/12
           </span>
           <div className="progress" role="presentation">
             <div className="progress__fill" style={{ width: `${progress}%` }} />
@@ -115,9 +116,9 @@ export function App() {
 
         <Hero onStart={() => goTo(SECTIONS[0].id)} />
 
-        {SECTIONS.map((section, index) => {
+        {SECTIONS.map((section) => {
           const Component = section.component;
-          return <Component key={section.id} id={section.id} index={index + 1} />;
+          return <Component key={section.id} id={section.id} index={Number(section.number)} />;
         })}
 
         <footer className="section" style={{ paddingTop: 40, paddingBottom: 56 }}>

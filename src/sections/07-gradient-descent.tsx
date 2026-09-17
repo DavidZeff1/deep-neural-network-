@@ -12,7 +12,7 @@ import {
   scaledPoints,
 } from '../lib/optimisation.ts';
 import { Panel, Note, Stats } from '../components/ui/layout.tsx';
-import { Detail } from '../components/ui/Detail.tsx';
+import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { Curve, Marker, Plot, Polyline } from '../components/viz/Plot.tsx';
@@ -523,6 +523,23 @@ export function GradientDescentSection({ id, index }: SectionProps) {
       <Equation caption="η is the learning rate: the fraction of the gradient applied at each step.">
         {'\\theta \\leftarrow \\theta - \\eta\\, \\nabla L(\\theta)'}
       </Equation>
+      <InWords>
+        <p>
+          The arrow means "replace with". For every parameter: work out how much increasing it would
+          increase the error — that is its entry of <M>{'\\nabla L'}</M> — multiply by a small
+          number <M>{'\\eta'}</M>, and subtract the result.
+        </p>
+        <p>
+          Subtracting is what sends it downhill. If raising a parameter raises the error its
+          derivative is positive, so subtracting lowers the parameter. If raising it lowers the error
+          the derivative is negative, and subtracting a negative raises the parameter. Either way the
+          error goes down.
+        </p>
+        <p>
+          <M>{'\\eta'}</M> — the Greek letter eta — controls how big a step to take. It is the
+          single most consequential number in training, and the demo below is mostly about why.
+        </p>
+      </InWords>
 
       <p className="prose-block">
         The rule uses only local information — the value of the gradient at the current point. It
@@ -533,79 +550,167 @@ export function GradientDescentSection({ id, index }: SectionProps) {
       <div className="prose-block">
         <Detail kicker="derivation" title="Why the step is against the gradient, and why η has to be small">
           <p>
-            Expand the loss around the current point to first order. For a small displacement{' '}
-            <M>{'\\mathbf{d}'}</M>:
+            Two separate questions: which direction should the step go, and how long should it be?
+          </p>
+          <p>
+            <strong>Direction.</strong> Zoom in close enough and the error surface looks like a flat
+            slope. Moving by a small displacement <M>{'\\mathbf{d}'}</M> changes the loss by
+            roughly
+          </p>
+          <Equation plain>{'\\Delta L \\approx \\nabla L \\cdot \\mathbf{d}'}</Equation>
+          <p>
+            That is the chain rule from section 00 with one term per parameter: how fast the loss
+            responds to each parameter, times how far that parameter moved, added up.
+          </p>
+          <p>
+            A product of two vectors like this can be rewritten using the angle{' '}
+            <M>{'\\vartheta'}</M> between them:
           </p>
           <Equation plain>
-            {'L(\\theta + \\mathbf{d}) = L(\\theta) + \\nabla L(\\theta)\\cdot\\mathbf{d} + O(\\lVert \\mathbf{d}\\rVert^2)'}
+            {'\\nabla L \\cdot \\mathbf{d} = \\lVert \\nabla L \\rVert \\; \\lVert \\mathbf{d} \\rVert \\; \\cos\\vartheta'}
           </Equation>
           <p>
-            To decrease the loss as fast as possible we want the most negative first-order term, but
-            that term can be made arbitrarily negative by taking <M>{'\\mathbf{d}'}</M> longer. So
-            the question has to be asked at a fixed step length: among all{' '}
-            <M>{'\\mathbf{d}'}</M> with <M>{'\\lVert\\mathbf{d}\\rVert = \\epsilon'}</M>,
-            which minimises <M>{'\\nabla L \\cdot \\mathbf{d}'}</M>?
+            Fix the step length. The only quantity left to choose is the angle, and{' '}
+            <M>{'\\cos\\vartheta'}</M> is most negative — giving the biggest decrease — at{' '}
+            <M>{'\\vartheta = 180^{\\circ}'}</M>. So the best direction is exactly opposite the
+            gradient. Anything more than 90° away from that increases the loss instead.
           </p>
           <p>
-            By the Cauchy–Schwarz inequality,{' '}
-            <M>{'\\nabla L\\cdot\\mathbf{d} \\ge -\\lVert\\nabla L\\rVert\\,\\epsilon'}</M>,
-            with equality exactly when <M>{'\\mathbf{d}'}</M> points opposite to{' '}
-            <M>{'\\nabla L'}</M>. So the steepest descent direction is{' '}
-            <M>{'-\\nabla L/\\lVert\\nabla L\\rVert'}</M>, and writing the step as{' '}
-            <M>{'-\\eta\\nabla L'}</M> folds the length and the normalisation into one constant.
+            That is the whole reason for the minus sign. Writing the step as{' '}
+            <M>{'-\\eta\\nabla L'}</M> rather than dividing by the gradient's length folds the
+            length into <M>{'\\eta'}</M>, with the side effect that steps are longer where the
+            surface is steeper.
           </p>
           <p>
-            The <M>{'O(\\lVert\\mathbf{d}\\rVert^2)'}</M> term is what limits{' '}
-            <M>{'\\eta'}</M>. The linear approximation is only trustworthy while the step is small
-            enough that curvature has not changed the picture. Keep the second-order term:
+            <strong>Length.</strong> The approximation above is only good for small steps, because
+            the slope itself changes as you move. Keeping one more term of accuracy:
           </p>
           <Equation plain>
-            {'L(\\theta - \\eta\\nabla L) \\approx L(\\theta) - \\eta\\lVert\\nabla L\\rVert^2 + \\tfrac{1}{2}\\eta^2\\,\\nabla L^{\\top}H\\,\\nabla L'}
+            {'L(\\theta - \\eta\\nabla L) \\approx L(\\theta) - \\underbrace{\\eta\\lVert\\nabla L\\rVert^2}_{\\text{gain, grows like }\\eta} + \\underbrace{\\tfrac{1}{2}\\eta^2 c \\lVert\\nabla L\\rVert^2}_{\\text{penalty, grows like }\\eta^2}'}
           </Equation>
           <p>
-            The first-order term is linear in <M>{'\\eta'}</M> and helps; the second-order term is
-            quadratic in <M>{'\\eta'}</M> and hurts. Beyond some <M>{'\\eta'}</M> the second wins
-            and the step increases the loss. Bounding{' '}
-            <M>{'\\nabla L^{\\top}H\\nabla L \\le \\lambda_{\\max}\\lVert\\nabla L\\rVert^2'}</M>{' '}
-            gives a decrease whenever <M>{'\\eta < 2/\\lambda_{\\max}'}</M> — the stability bound
-            that appears again below.
+            <M>{'c'}</M> measures how quickly the slope itself is changing — the curvature. The
+            middle term is the decrease you wanted and grows in proportion to{' '}
+            <M>{'\\eta'}</M>. The last term is the correction for the slope not staying put, and it
+            grows with <M>{'\\eta'}</M> squared, so past some point it overwhelms the gain.
+          </p>
+          <p>Setting the two equal finds where a step stops helping at all:</p>
+          <Equation plain>
+            {'\\eta\\lVert\\nabla L\\rVert^2 = \\tfrac{1}{2}\\eta^2 c\\lVert\\nabla L\\rVert^2 \\;\\Longrightarrow\\; \\eta = \\frac{2}{c}'}
+          </Equation>
+          <p>
+            Below <M>{'2/c'}</M> each step reduces the loss; above it each step increases the loss
+            and the iterates grow without bound. Note what this says on its own: the flatter the
+            surface, the larger the step you are allowed to take.
           </p>
         </Detail>
 
-        <Detail title="Exact convergence rate on a quadratic">
+        <Detail title="How many steps convergence takes, and what decides it">
           <p>
-            Take <M>{'L(\\theta) = \\tfrac{1}{2}\\theta^{\\top}H\\theta'}</M> with{' '}
-            <M>{'H'}</M> symmetric positive definite, so <M>{'\\nabla L = H\\theta'}</M> and the
-            minimum is at the origin. The update is
-          </p>
-          <Equation plain>{'\\theta_{t+1} = \\theta_t - \\eta H\\theta_t = (I - \\eta H)\\theta_t'}</Equation>
-          <p>
-            Write <M>{'\\theta_t'}</M> in the eigenbasis of <M>{'H'}</M>. Each coordinate evolves
-            independently: the component along the eigenvector with eigenvalue{' '}
-            <M>{'\\lambda_i'}</M> is multiplied by <M>{'(1 - \\eta\\lambda_i)'}</M> every step,
-            so after <M>{'t'}</M> steps it is <M>{'(1-\\eta\\lambda_i)^t'}</M> times its initial
-            value.
-          </p>
-          <p>
-            Convergence therefore requires <M>{'|1 - \\eta\\lambda_i| < 1'}</M> for every{' '}
-            <M>{'i'}</M>, that is <M>{'0 < \\eta < 2/\\lambda_{\\max}'}</M>. The slowest
-            coordinate is the one with the factor closest to 1, so the rate is governed by
-          </p>
-          <Equation plain>{'\\rho(\\eta) = \\max_i |1 - \\eta\\lambda_i|'}</Equation>
-          <p>
-            Minimising <M>{'\\rho'}</M> over <M>{'\\eta'}</M> balances the two extremes:{' '}
-            <M>{'1 - \\eta\\lambda_{\\min} = \\eta\\lambda_{\\max} - 1'}</M>, giving{' '}
-            <M>{'\\eta^{*} = 2/(\\lambda_{\\max}+\\lambda_{\\min})'}</M> and
+            Start with one parameter and the simplest bowl,{' '}
+            <M>{'L(\\theta) = \\tfrac{1}{2}c\\,\\theta^2'}</M>, whose minimum is at{' '}
+            <M>{'\\theta = 0'}</M>. Its derivative is <M>{'c\\theta'}</M>, so one step is
           </p>
           <Equation plain>
-            {'\\rho^{*} = \\frac{\\lambda_{\\max}-\\lambda_{\\min}}{\\lambda_{\\max}+\\lambda_{\\min}} = \\frac{\\kappa-1}{\\kappa+1}, \\qquad \\kappa = \\frac{\\lambda_{\\max}}{\\lambda_{\\min}}'}
+            {'\\theta_{t+1} = \\theta_t - \\eta\\, c\\, \\theta_t = (1 - \\eta c)\\,\\theta_t'}
           </Equation>
           <p>
-            The number of steps to reduce the error by a fixed factor is{' '}
-            <M>{'\\Theta(\\kappa)'}</M>. At <M>{'\\kappa = 1'}</M> one step suffices; at{' '}
-            <M>{'\\kappa = 100'}</M> it takes roughly a hundred times as many. This is why the
-            condition number, not the gradient magnitude, predicts how slow training will be — and
-            why the two-parameter demo below lets you change it directly.
+            Every step multiplies the distance to the minimum by the same fixed number{' '}
+            <M>{'(1-\\eta c)'}</M>. After <M>{'t'}</M> steps the distance is{' '}
+            <M>{'(1-\\eta c)^{t}'}</M> times what it started as. Three cases, all reproducible in
+            the demo above:
+          </p>
+          <ul>
+            <li>
+              <M>{'0 < \\eta c < 1'}</M> — the multiplier is between 0 and 1, so the distance
+              shrinks steadily and the iterates approach from one side.
+            </li>
+            <li>
+              <M>{'1 < \\eta c < 2'}</M> — the multiplier is between −1 and 0, so the sign flips
+              each step. The iterates overshoot and alternate sides, but shrink.
+            </li>
+            <li>
+              <M>{'\\eta c > 2'}</M> — the multiplier is below −1 and the distance grows every step.
+              Same <M>{'2/c'}</M> limit as before.
+            </li>
+          </ul>
+          <p>
+            <strong>Now more than one parameter.</strong> A bowl in two dimensions is generally not
+            round: it is an ellipse, steep across the narrow direction and shallow along the long
+            one. The useful fact is that such a surface always splits into a set of perpendicular
+            directions that do not interfere with each other, each behaving exactly like the
+            one-parameter case above with its own curvature.
+          </p>
+          <p>
+            Those special directions are called <strong>eigenvectors</strong> and each one's
+            curvature is its <strong>eigenvalue</strong>, written <M>{'\\lambda'}</M>. You do not
+            need to compute them to use the result; the point is only that a multi-parameter problem
+            is several single-parameter problems running side by side. In the two-parameter demo
+            below, the long axis of the ellipse is the small-<M>{'\\lambda'}</M> direction and the
+            short axis the large-<M>{'\\lambda'}</M> one.
+          </p>
+          <p>
+            One learning rate has to serve all of them. It must stay below{' '}
+            <M>{'2/\\lambda_{\\max}'}</M> or the steepest direction diverges. But then the
+            shallowest direction shrinks by only <M>{'(1-\\eta\\lambda_{\\min})'}</M> per step,
+            which is close to 1 when <M>{'\\lambda_{\\min}'}</M> is small. Overall progress is set
+            by whichever direction is worst:
+          </p>
+          <Equation plain>
+            {'\\text{shrink factor per step} = \\max_i \\left|1 - \\eta\\lambda_i\\right|'}
+          </Equation>
+          <p>
+            The best <M>{'\\eta'}</M> balances the two extremes — fast enough for the shallow
+            direction, slow enough for the steep one — and gives
+          </p>
+          <Equation plain>
+            {'\\text{best shrink factor} = \\frac{\\kappa - 1}{\\kappa + 1}, \\qquad \\kappa = \\frac{\\lambda_{\\max}}{\\lambda_{\\min}}'}
+          </Equation>
+          <p>
+            <M>{'\\kappa'}</M> is the <strong>condition number</strong> — the ratio of steepest
+            curvature to shallowest, which is just how elongated the bowl is. Putting numbers in:
+          </p>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>κ</th>
+                <th>shrink per step</th>
+                <th>steps to shrink the error 1000×</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1 (perfectly round)</td>
+                <td>0</td>
+                <td>1</td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>0.50</td>
+                <td>10</td>
+              </tr>
+              <tr>
+                <td>10</td>
+                <td>0.82</td>
+                <td>35</td>
+              </tr>
+              <tr>
+                <td>100</td>
+                <td>0.98</td>
+                <td>344</td>
+              </tr>
+              <tr>
+                <td>1000</td>
+                <td>0.998</td>
+                <td>3453</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            Roughly, the work is proportional to <M>{'\\kappa'}</M>. This is the most useful single
+            fact about gradient descent: its speed depends on the <em>shape</em> of the surface, not
+            on how steep it is or how far away the minimum is. The two-parameter demo lets you change{' '}
+            <M>{'\\kappa'}</M> directly and watch the cost.
           </p>
         </Detail>
       </div>
@@ -632,6 +737,18 @@ export function GradientDescentSection({ id, index }: SectionProps) {
           <Equation plain>
             {'\\mathbf{v} \\leftarrow \\beta\\mathbf{v} + \\nabla L(\\theta), \\qquad \\theta \\leftarrow \\theta - \\eta\\mathbf{v}'}
           </Equation>
+          <InWords>
+            <p>
+              Keep a running quantity <M>{'\\mathbf{v}'}</M>. Each step, shrink it a little — that
+              is the <M>{'\\beta'}</M> factor, typically 0.9 — then add the current gradient to it.
+              Step along <M>{'\\mathbf{v}'}</M> instead of along the gradient.
+            </p>
+            <p>
+              The effect: a direction the gradient keeps pointing in builds up, while a direction
+              that flips back and forth cancels itself out. At <M>{'\\beta = 0'}</M> nothing is kept
+              and this is ordinary gradient descent again.
+            </p>
+          </InWords>
           <p>
             Unrolling the recursion gives{' '}
             <M>{'\\mathbf{v}_t = \\sum_{k=0}^{t}\\beta^{k}\\nabla L(\\theta_{t-k})'}</M> — an

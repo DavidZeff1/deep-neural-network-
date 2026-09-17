@@ -5,10 +5,13 @@ network: weights are initialised, forward passes are computed, gradients are
 derived by backpropagation and training runs in the browser. There are no
 pre-recorded animations and no placeholder controls.
 
-Each section pairs an interactive figure with the mathematics behind it. The
-one-paragraph statement is always visible; the full derivation sits in a
-collapsible block next to it, so nothing is asserted without proof and the page
-still reads as a sequence of experiments rather than a textbook.
+No mathematical background is assumed. Section 00 teaches the notation the rest
+of the course uses — sums, vectors, derivatives, the chain rule — with an
+interactive for each. After that, every section pairs its figure with the
+mathematics behind it: the claim in one paragraph, a plain-language restatement
+of every equation, and the full derivation in a collapsible block, so nothing is
+asserted without proof and the page still reads as a sequence of experiments
+rather than a textbook.
 
 ![Twelve sections, from network structure to a full playground](docs/overview.png)
 
@@ -16,6 +19,7 @@ still reads as a sequence of experiments rather than a textbook.
 
 | # | Section | What it does |
 |---|---------|--------------|
+| 00 | Reading the mathematics | Σ, vectors and matrices, derivatives and the chain rule, each with a live panel. Skippable if familiar |
 | 01 | Network structure | Reshape an architecture and watch the layer shapes and parameter count follow |
 | 02 | Neurons | One neuron, two inputs; the weighted sum, the bias and the line `z = 0` in the input plane |
 | 03 | Weights & biases | Edit any entry of `W` or `b`; measure how activation and gradient scale compound over 10 layers as the initialisation gain changes |
@@ -44,7 +48,7 @@ The built site is static and has no network dependencies at runtime.
 
 ```bash
 npm test             # numerical correctness of the network engine — 24 tests
-npm run test:browser # every interactive control — 87 checks, needs a preview server
+npm run test:browser # every interactive control — 97 checks, needs a preview server
 ```
 
 `npm test` is the important one. It gradient-checks backpropagation against
@@ -58,14 +62,18 @@ without changing the fit, dataset balance and reproducibility, and that a networ
 with no hidden layer fails on XOR while solving a linearly separable set.
 
 `npm run test:browser` needs a preview server on port 4173 and Playwright's
-Chromium. It drives 87 checks across all twelve sections — sliders, buttons,
+Chromium. It drives 97 checks across all thirteen sections — sliders, buttons,
 selects, canvas clicks, training runs, navigation, theme switching and mobile
 layout — and asserts on the values the page displays: that `BCE(0.8, y=1)` reads
 `0.2231`, that one descent step equals `θ − η∇L`, that the on-screen chain-rule
 product equals the value backpropagation produced, that softmax with logits of
 102/101/100.1 returns the same probabilities as 2/1/0.1 rather than NaN, and that
 a gain of 0.7 makes activations vanish over ten layers while 1.41 keeps them
-flat. Set `CHROMIUM_PATH` to use a system Chromium instead of a downloaded one.
+flat. The prerequisites section is checked the same way: the Σ panel's running
+total must equal the sum of its terms, the matrix-vector product must be
+[0, 9, 1], shrinking the nudge must bring rise ÷ run within 0.001 of the exact
+derivative, and the chain-rule product must match a direct measurement. Set
+`CHROMIUM_PATH` to use a system Chromium instead of a downloaded one.
 
 ## Layout
 
@@ -86,6 +94,7 @@ src/
     layout/            section shell
   hooks/               mutable network, trainer, ensemble trainer, scroll spy, theme
   sections/            one file per section, plus the registry that orders them
+                       (00-notation.tsx is the prerequisites primer)
 tests/
   network.test.ts      numerical tests
   browser/             end-to-end interaction tests

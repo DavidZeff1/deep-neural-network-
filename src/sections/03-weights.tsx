@@ -11,7 +11,7 @@ import { useMutableNetwork } from '../hooks/useMutableNetwork.ts';
 import { NetworkDiagram, NEGATIVE_COLOR, POSITIVE_COLOR } from '../components/viz/NetworkDiagram.tsx';
 import type { DiagramSelection } from '../components/viz/NetworkDiagram.tsx';
 import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
-import { Detail } from '../components/ui/Detail.tsx';
+import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { fmt } from '../lib/format.ts';
@@ -478,6 +478,18 @@ export function WeightsSection({ id, index }: SectionProps) {
           <Equation>
             {'z^{(l)}_j = \\sum_i W^{(l)}_{ji}\\, a^{(l-1)}_i + b^{(l)}_j'}
           </Equation>
+          <InWords>
+            <p>
+              Unit <M>{'j'}</M> of this layer walks along row <M>{'j'}</M> of the grid, multiplies
+              each weight by the matching activation from the previous layer, adds the products up,
+              and adds its own bias.
+            </p>
+            <p>
+              The key detail for later: the weight <M>{'W_{ji}'}</M> is used exactly once, in exactly
+              one product. Nothing else in the entire network touches it. That is why working out
+              how much it affects the error turns out to be easy.
+            </p>
+          </InWords>
           <p>
             Because <M>{'W^{(l)}_{ji}'}</M> multiplies only <M>{'a^{(l-1)}_i'}</M>, its partial
             derivative is <M>{'\\partial z^{(l)}_j / \\partial W^{(l)}_{ji} = a^{(l-1)}_i'}</M>.
@@ -537,27 +549,74 @@ export function WeightsSection({ id, index }: SectionProps) {
 
           <Detail title="Where 2/fan_in and 2/(fan_in + fan_out) come from">
             <p>
-              Consider one pre-activation <M>{'z_j = \\sum_{i=1}^{n_{\\text{in}}} w_{ji} a_i'}</M>{' '}
-              with the bias at zero. Treat the weights as independent, zero-mean, with variance{' '}
-              <M>{'\\sigma_w^2'}</M>, and independent of the activations. The variance of a sum of
-              independent zero-mean terms is the sum of the variances:
+              The goal is to pick a spread for the random initial weights such that the numbers
+              flowing through the network keep roughly the same spread from one layer to the next.
+              Too small and they shrink towards zero; too large and they blow up. The calculation
+              below finds the value that keeps them steady.
+            </p>
+            <p>
+              Three facts about variance are all that is needed. Writing{' '}
+              <M>{'\\operatorname{Var}(X)'}</M> for how spread out a quantity is (section 00):
+            </p>
+            <ul>
+              <li>
+                Scaling multiplies the spread by the square:{' '}
+                <M>{'\\operatorname{Var}(cX) = c^2\\operatorname{Var}(X)'}</M>. Doubling every
+                number quadruples the variance.
+              </li>
+              <li>
+                Adding independent quantities adds their variances:{' '}
+                <M>{'\\operatorname{Var}(X+Y) = \\operatorname{Var}(X) + \\operatorname{Var}(Y)'}</M>.
+              </li>
+              <li>
+                For a quantity with average zero, variance and mean-square are the same thing:{' '}
+                <M>{'\\operatorname{Var}(X) = \\mathbb{E}[X^2]'}</M>.
+              </li>
+            </ul>
+            <p>
+              Now take one unit's pre-activation, which is a sum of{' '}
+              <M>{'n_{\\text{in}}'}</M> products, with the bias starting at zero:
+            </p>
+            <Equation plain>{'z_j = \\sum_{i=1}^{n_{\\text{in}}} w_{ji} a_i'}</Equation>
+            <p>
+              Assume the weights are drawn independently with average 0 and spread{' '}
+              <M>{'\\sigma_w^2'}</M>, and that they are unrelated to the incoming activations.
+              Applying the second fact to the sum, then the first to each product:
             </p>
             <Equation plain>
               {'\\operatorname{Var}(z_j) = \\sum_{i} \\operatorname{Var}(w_{ji} a_i) = n_{\\text{in}}\\,\\sigma_w^2\\,\\mathbb{E}[a^2]'}
             </Equation>
             <p>
-              To keep <M>{'\\operatorname{Var}(z)'}</M> equal to <M>{'\\mathbb{E}[a^2]'}</M> from
-              layer to layer we need <M>{'n_{\\text{in}}\\sigma_w^2 = 1'}</M>, that is{' '}
-              <M>{'\\sigma_w^2 = 1/n_{\\text{in}}'}</M>. That is the right answer for an
-              activation that passes its input through roughly unchanged near zero, such as tanh.
+              Read that result plainly: the spread of a unit's output is the spread of one weight,
+              multiplied by how many inputs it has, multiplied by the typical squared size of those
+              inputs. The fan-in appears because more inputs means more terms added together, and
+              adding independent terms accumulates variance.
             </p>
             <p>
-              ReLU changes the accounting. If <M>{'z'}</M> is symmetric about zero then{' '}
-              <M>{'a = \\max(0, z)'}</M> is zero half the time, and{' '}
-              <M>{'\\mathbb{E}[a^2] = \\tfrac{1}{2}\\operatorname{Var}(z)'}</M>. Substituting
-              into the recursion gives{' '}
-              <M>{'\\operatorname{Var}(z^{(l)}) = \\tfrac{1}{2} n_{\\text{in}} \\sigma_w^2 \\operatorname{Var}(z^{(l-1)})'}</M>,
-              so preserving the scale requires
+              For the spread to stay the same from layer to layer we need the multiplier{' '}
+              <M>{'n_{\\text{in}}\\sigma_w^2'}</M> to equal 1, which means
+            </p>
+            <Equation plain>{'\\sigma_w^2 = \\frac{1}{n_{\\text{in}}}'}</Equation>
+            <p>
+              In words: a unit with 100 inputs should have weights one tenth the size of a unit with
+              1 input, because <M>{'\\sigma_w = 1/\\sqrt{n_{\\text{in}}}'}</M>. That is the
+              right answer for an activation that passes its input through roughly unchanged near
+              zero, such as tanh.
+            </p>
+            <p>
+              ReLU changes the accounting, because it throws half the signal away. If{' '}
+              <M>{'z'}</M> is equally likely to be positive or negative, then{' '}
+              <M>{'a = \\max(0, z)'}</M> is exactly zero half the time and equal to{' '}
+              <M>{'z'}</M> the other half. Averaging <M>{'a^2'}</M> over both cases gives half of
+              what averaging <M>{'z^2'}</M> would:
+            </p>
+            <Equation plain>
+              {'\\mathbb{E}[a^2] = \\underbrace{\\tfrac{1}{2}\\cdot 0}_{\\text{negative half}} + \\underbrace{\\tfrac{1}{2}\\,\\mathbb{E}[z^2]}_{\\text{positive half}} = \\tfrac{1}{2}\\operatorname{Var}(z)'}
+            </Equation>
+            <p>
+              Feeding that factor of one half back into the previous result, each layer now shrinks
+              the spread by an extra half unless the weights compensate. Doubling{' '}
+              <M>{'\\sigma_w^2'}</M> exactly cancels it:
             </p>
             <Equation plain>{'\\sigma_w^2 = \\frac{2}{n_{\\text{in}}} \\quad \\text{(He)}'}</Equation>
             <p>
@@ -570,6 +629,15 @@ export function WeightsSection({ id, index }: SectionProps) {
             <Equation plain>
               {'\\sigma_w^2 = \\frac{2}{n_{\\text{in}} + n_{\\text{out}}} \\quad \\text{(Glorot)}'}
             </Equation>
+            <InWords tag="in practice">
+              <p>
+                You never type these numbers yourself — every framework has{' '}
+                <code>he_normal</code> and <code>glorot_uniform</code> built in. What matters is
+                knowing that the right answer depends on the layer's width and on which activation
+                follows it, and that getting it wrong makes a deep network untrainable rather than
+                merely slower.
+              </p>
+            </InWords>
             <p>
               which satisfies neither exactly and both approximately. In terms of the{' '}
               <em>gain</em> in the plot below, writing{' '}

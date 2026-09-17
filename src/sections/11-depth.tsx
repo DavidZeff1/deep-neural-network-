@@ -11,7 +11,7 @@ import type { EnsembleMember } from '../hooks/useEnsembleTrainer.ts';
 import { DecisionBoundary } from '../components/viz/DecisionBoundary.tsx';
 import { MetricChart } from '../components/viz/MetricChart.tsx';
 import { Panel, Note, Stats } from '../components/ui/layout.tsx';
-import { Detail } from '../components/ui/Detail.tsx';
+import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Button, SelectField, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { fmt, fmtPercent } from '../lib/format.ts';
@@ -244,6 +244,19 @@ export function DepthSection({ id, index }: SectionProps) {
             input space. In <M>{'d = 2'}</M> dimensions they cut the plane into at most
           </p>
           <Equation plain>{'\\binom{n}{0} + \\binom{n}{1} + \\binom{n}{2}'}</Equation>
+          <InWords tag="notation">
+            <p>
+              <M>{'\\binom{n}{k}'}</M>, read "n choose k", counts how many ways you can pick{' '}
+              <M>{'k'}</M> items from <M>{'n'}</M> when the order does not matter.{' '}
+              <M>{'\\binom{n}{0} = 1'}</M> (one way to pick nothing),{' '}
+              <M>{'\\binom{n}{1} = n'}</M>, and <M>{'\\binom{n}{2} = n(n-1)/2'}</M>.
+            </p>
+            <p>
+              For 8 units: <M>{'1 + 8 + 28 = 37'}</M> regions. Doubling the width to 16 gives{' '}
+              <M>{'1 + 16 + 120 = 137'}</M> — roughly four times as many for twice the units, which
+              is what "quadratic in the width" means.
+            </p>
+          </InWords>
           <p>
             regions — quadratic in <M>{'n'}</M>. Adding a second layer does not add hyperplanes; it
             folds the regions produced by the first layer onto each other, so each subsequent layer
@@ -305,6 +318,18 @@ export function DepthSection({ id, index }: SectionProps) {
             <Equation plain>
               {'\\#\\text{regions} \\;\\ge\\; \\left\\lfloor \\frac{n}{d}\\right\\rfloor^{d(L-1)} \\sum_{j=0}^{d}\\binom{n}{j}'}
             </Equation>
+            <InWords tag="reading it">
+              <p>
+                <M>{'\\lfloor \\cdot \\rfloor'}</M> means round down to a whole number. The
+                right-hand factor is the single-layer count from above; the left-hand factor is what
+                depth multiplies it by.
+              </p>
+              <p>
+                The important feature is where <M>{'L'}</M> sits: in the <em>exponent</em>. Adding a
+                layer multiplies the count, while adding units to an existing layer only adds to it.
+                Multiplying repeatedly is what produces exponential growth.
+              </p>
+            </InWords>
             <p>
               The base is the single-layer count and the prefactor is the compounding from depth.
               Parameters, by contrast, grow linearly in <M>{'L'}</M>: about{' '}

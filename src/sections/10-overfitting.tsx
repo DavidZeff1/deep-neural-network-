@@ -8,7 +8,7 @@ import { useTrainer } from '../hooks/useTrainer.ts';
 import { DecisionBoundary } from '../components/viz/DecisionBoundary.tsx';
 import { MetricChart } from '../components/viz/MetricChart.tsx';
 import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
-import { Detail } from '../components/ui/Detail.tsx';
+import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Button, SelectField, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { fmt, fmtPercent } from '../lib/format.ts';
@@ -280,6 +280,17 @@ export function OverfittingSection({ id, index }: SectionProps) {
           <Equation plain>
             {'\\hat{R}(\\theta) = \\frac{1}{m}\\sum_{i=1}^{m} L\\!\\left(f_\\theta(\\mathbf{x}^{(i)}), y^{(i)}\\right) \\qquad\\text{vs}\\qquad R(\\theta) = \\mathbb{E}_{(\\mathbf{x},y)}\\bigl[L(f_\\theta(\\mathbf{x}), y)\\bigr]'}
           </Equation>
+          <InWords>
+            <p>
+              On the left: the average error over the examples you have, which you can compute. On
+              the right: the average error over every example you might ever see, which you cannot.
+              The hat on <M>{'\\hat{R}'}</M> marks it as an estimate of the real thing.
+            </p>
+            <p>
+              Training minimises the left quantity because it is the only one available. Overfitting
+              is what happens when the two come apart.
+            </p>
+          </InWords>
           <p>
             The gap <M>{'R(\\theta) - \\hat{R}(\\theta)'}</M> is the generalisation gap.
             Overfitting is the situation where minimising{' '}
@@ -305,6 +316,31 @@ export function OverfittingSection({ id, index }: SectionProps) {
           <Equation plain>
             {'\\mathbb{E}_{D,\\varepsilon}\\bigl[(y - f_D(\\mathbf{x}))^2\\bigr] = \\underbrace{\\bigl(h(\\mathbf{x}) - \\bar{f}(\\mathbf{x})\\bigr)^2}_{\\text{bias}^2} + \\underbrace{\\mathbb{E}_D\\bigl[(f_D(\\mathbf{x})-\\bar{f}(\\mathbf{x}))^2\\bigr]}_{\\text{variance}} + \\underbrace{\\sigma^2}_{\\text{noise}}'}
           </Equation>
+          <InWords>
+            <p>
+              Imagine training the same architecture many times, each time on a different sample of
+              data. You get many slightly different models. The equation splits their average error
+              into three parts that add up:
+            </p>
+            <ul>
+              <li>
+                <strong>Bias</strong> — how far the <em>typical</em> model is from the truth. A model
+                too simple to represent the pattern has high bias no matter how much data it sees.
+              </li>
+              <li>
+                <strong>Variance</strong> — how much the models differ from each other. A model
+                flexible enough to chase the noise in each particular sample has high variance.
+              </li>
+              <li>
+                <strong>Noise</strong> — randomness in the labels themselves. No model can do
+                anything about this, which is why the error never reaches zero on noisy data.
+              </li>
+            </ul>
+            <p>
+              Making the model bigger lowers bias and raises variance. Regularising does the
+              reverse. There is no setting that makes both small, only a best trade.
+            </p>
+          </InWords>
           <p>
             with <M>{'\\bar{f} = \\mathbb{E}_D[f_D]'}</M>. Bias is the error of the average model
             — how far the family can get from the truth at all. Variance is how much the fitted
@@ -444,6 +480,17 @@ export function OverfittingSection({ id, index }: SectionProps) {
           <Equation plain>
             {'W \\leftarrow (1 - \\eta\\lambda)\\,W - \\eta\\, \\nabla_W L'}
           </Equation>
+          <InWords>
+            <p>
+              Compare with the plain update <M>{'W \\leftarrow W - \\eta\\nabla_W L'}</M>: the
+              only change is that <M>{'W'}</M> is first multiplied by a number slightly below 1. With{' '}
+              <M>{'\\eta = 0.1'}</M> and <M>{'\\lambda = 0.02'}</M> that factor is 0.998.
+            </p>
+            <p>
+              So every weight is nudged a little towards zero on every step, and only survives if the
+              data keeps pushing it back. Weights that are not earning their keep fade out.
+            </p>
+          </InWords>
           <p>
             Every weight is multiplied by a factor slightly below 1 at each step — hence the name
             weight decay. Biases are usually excluded: they shift the function without increasing

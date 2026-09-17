@@ -7,7 +7,7 @@ import { ACTIVATIONS, HIDDEN_ACTIVATIONS } from '../lib/activations.ts';
 import type { ActivationName } from '../lib/activations.ts';
 import { NetworkDiagram } from '../components/viz/NetworkDiagram.tsx';
 import { Panel, Note, Stats } from '../components/ui/layout.tsx';
-import { Detail, Steps } from '../components/ui/Detail.tsx';
+import { Detail, InWords, Steps } from '../components/ui/Detail.tsx';
 import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { fmt } from '../lib/format.ts';
@@ -302,6 +302,15 @@ export function ForwardSection({ id, index }: SectionProps) {
 
         <div className="stack">
           <Panel title="The same step in matrix form" hint="fills in as you step">
+            <div style={{ marginBottom: 12 }}>
+              <InWords tag="reminder">
+                <p>
+                  The grid is <M>{'W^{(1)}'}</M>: one row per hidden unit, one column per input. The
+                  column beside it is the input. Multiplying them runs the sum-of-products once per
+                  row, exactly as in section 00, and the column on the right holds the three results.
+                </p>
+              </InWords>
+            </div>
             <Equation plain>
               {`\\mathbf{z}^{(1)} = ${matrixLatex(network.W[0], 2)} ${columnLatex(x, 2)} + ${columnLatex(network.b[0], 2)} = ${step >= 1 ? columnLatex(trace.layers[0].z, 3) : PLACEHOLDER_COLUMN(3)}`}
             </Equation>
@@ -397,6 +406,14 @@ export function ForwardSection({ id, index }: SectionProps) {
           <Equation plain>
             {'\\underbrace{Z^{(1)}}_{3\\times 4} = \\underbrace{W^{(1)}}_{3\\times 2}\\underbrace{X}_{2\\times 4} + \\underbrace{\\mathbf{b}^{(1)}}_{3\\times 1}'}
           </Equation>
+          <InWords>
+            <p>
+              The labels under each symbol are its shape — rows × columns. Four examples become four
+              columns side by side, and the same weight grid processes all of them in one
+              multiplication, producing a 3 × 4 grid: three hidden units for each of the four
+              examples.
+            </p>
+          </InWords>
           <p>
             The bias has three entries but the result has twelve. The addition is a broadcast: the
             single column <M>{'\\mathbf{b}^{(1)}'}</M> is added to each of the four columns of the

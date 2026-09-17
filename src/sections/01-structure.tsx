@@ -5,7 +5,7 @@ import { MLP } from '../lib/network.ts';
 import { NetworkDiagram } from '../components/viz/NetworkDiagram.tsx';
 import { ArchitectureControls } from '../components/ui/ArchitectureControls.tsx';
 import { Panel, Stats, Note } from '../components/ui/layout.tsx';
-import { Detail, Notation } from '../components/ui/Detail.tsx';
+import { Detail, InWords, Notation } from '../components/ui/Detail.tsx';
 import { Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 
@@ -123,6 +123,19 @@ export function StructureSection({ id, index }: SectionProps) {
           <Equation caption="z is the pre-activation, a is the activation, f is applied elementwise.">
             {'\\mathbf{z}^{(l)} = W^{(l)}\\mathbf{a}^{(l-1)} + \\mathbf{b}^{(l)}, \\qquad \\mathbf{a}^{(l)} = f\\!\\left(\\mathbf{z}^{(l)}\\right)'}
           </Equation>
+          <InWords>
+            <p>
+              Take the list of numbers the previous layer produced. Multiply it by this layer's grid
+              of weights, which gives one number per unit in this layer. Add each unit's bias. That
+              list is <M>{'\\mathbf{z}'}</M>. Then run every entry of it through the function{' '}
+              <M>{'f'}</M> separately, and the resulting list is <M>{'\\mathbf{a}'}</M> — what this
+              layer hands on.
+            </p>
+            <p>
+              The superscript <M>{'(l)'}</M> is a label saying which layer, not a power. Section 00
+              has the full notation list.
+            </p>
+          </InWords>
           <p>
             If layer <M>{'l'}</M> has <M>{'n_l'}</M> units and the previous layer has{' '}
             <M>{'n_{l-1}'}</M>, then <M>{'W^{(l)}'}</M> has shape <M>{'n_l \\times n_{l-1}'}</M> and{' '}
@@ -132,6 +145,13 @@ export function StructureSection({ id, index }: SectionProps) {
           <Equation>
             {'\\#\\text{params} = \\sum_{l=1}^{L} \\left( n_l\\, n_{l-1} + n_l \\right)'}
           </Equation>
+          <InWords>
+            <p>
+              For each layer, count the weights — one for every pair of (unit in this layer, unit in
+              the previous layer), which is width times previous width — then add one bias per unit.
+              Do that for every layer and add the results together.
+            </p>
+          </InWords>
           <p>
             For the current architecture ({sizes.join(' → ')}) that is{' '}
             <strong className="mono">{totalParameters}</strong> numbers. Training means choosing

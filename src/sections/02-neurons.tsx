@@ -5,7 +5,7 @@ import { ACTIVATIONS, HIDDEN_ACTIVATIONS } from '../lib/activations.ts';
 import type { ActivationName } from '../lib/activations.ts';
 import { fmt, clamp } from '../lib/format.ts';
 import { Panel, Note, Stats } from '../components/ui/layout.tsx';
-import { Detail } from '../components/ui/Detail.tsx';
+import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Segmented, Slider, Button } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
 import { DecisionBoundary } from '../components/viz/DecisionBoundary.tsx';
@@ -199,6 +199,18 @@ export function NeuronsSection({ id, index }: SectionProps) {
       <Equation caption="For a neuron with n inputs. In matrix form, a whole layer of these is a = f(Wx + b).">
         {'z = \\sum_{i=1}^{n} w_i x_i + b, \\qquad a = f(z)'}
       </Equation>
+      <InWords>
+        <p>
+          Multiply each input by its own weight, add all those products together, then add one more
+          number called the bias. Call the total <M>{'z'}</M>. Finally pass{' '}
+          <M>{'z'}</M> through a function <M>{'f'}</M> to get the neuron's output{' '}
+          <M>{'a'}</M>.
+        </p>
+        <p>
+          With two inputs that is literally{' '}
+          <M>{'z = w_1x_1 + w_2x_2 + b'}</M> — the worked example below uses exactly those numbers.
+        </p>
+      </InWords>
 
       <div className="grid grid--side">
         <Panel
@@ -296,6 +308,19 @@ export function NeuronsSection({ id, index }: SectionProps) {
           <Equation caption="d is positive on the side the weight vector points towards, negative on the other.">
             {'z(\\mathbf{x}) = \\lVert \\mathbf{w} \\rVert \\cdot d(\\mathbf{x}), \\qquad d(\\mathbf{x}) = \\frac{\\mathbf{w}\\cdot\\mathbf{x} + b}{\\lVert \\mathbf{w} \\rVert}'}
           </Equation>
+          <InWords tag="notation">
+            <p>
+              <M>{'\\lVert \\mathbf{w} \\rVert'}</M> is the length of the weight vector — for two
+              weights it is <M>{'\\sqrt{w_1^2 + w_2^2}'}</M>, straight from Pythagoras.{' '}
+              <M>{'\\mathbf{w}\\cdot\\mathbf{x}'}</M> is the sum of products{' '}
+              <M>{'w_1x_1 + w_2x_2'}</M> from the top of this section.
+            </p>
+            <p>
+              So the statement is: <M>{'z'}</M> equals how far the point sits from the line, times a
+              fixed number that depends only on the weights. Points twice as far from the line get
+              twice the <M>{'z'}</M>.
+            </p>
+          </InWords>
           <p>
             Two consequences follow. Scaling <M>{'\\mathbf{w}'}</M> and <M>{'b'}</M> by the same
             positive constant leaves the boundary fixed but multiplies every <M>{'z'}</M> by that
