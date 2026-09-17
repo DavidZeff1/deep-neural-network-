@@ -1,0 +1,33 @@
+{
+  "name": "deep-neural-networks-interactive",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "An interactive, visualization-first course on deep neural networks.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc -b",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "test:browser": "node tests/browser/interaction.mjs"
+  },
+  "dependencies": {
+    "d3-scale": "^4.0.2",
+    "d3-shape": "^3.2.0",
+    "katex": "^0.16.11",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/d3-scale": "^4.0.8",
+    "@types/d3-shape": "^3.1.6",
+    "@types/node": "^22.20.3",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "playwright": "^1.63.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
