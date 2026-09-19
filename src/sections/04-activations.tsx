@@ -7,6 +7,7 @@ import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
 import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Segmented, Slider, Button } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { Curve, Marker, Plot } from '../components/viz/Plot.tsx';
 import { fmt } from '../lib/format.ts';
 
@@ -574,6 +575,19 @@ export function ActivationsSection({ id, index }: SectionProps) {
           cancellation.
         </p>
       </Note>
+
+      <Exercise
+        notebook="04-activations.ipynb"
+        count={10}
+        tasks={[
+          <>Implement ReLU, leaky ReLU, sigmoid and tanh, vectorised and overflow-safe</>,
+          <>Write all four derivatives — each is checked against finite differences of your own function</>,
+          <>Build a numerically stable <code>softmax</code> and <code>log_softmax</code></>,
+          <>Measure how many layers a sigmoid stack survives before the gradient underflows</>,
+        ]}
+      >
+        Four activations, four derivatives, and a softmax that survives logits of 1000.
+      </Exercise>
     </Section>
   );
 }

@@ -10,6 +10,7 @@ import { Panel, Note, Stats } from '../components/ui/layout.tsx';
 import { Detail, InWords, Steps } from '../components/ui/Detail.tsx';
 import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { fmt } from '../lib/format.ts';
 
 interface Step {
@@ -468,6 +469,18 @@ export function ForwardSection({ id, index }: SectionProps) {
           reporting metrics, for the same reason.
         </p>
       </Note>
+
+      <Exercise
+        notebook="05-forward.ipynb"
+        count={2}
+        tasks={[
+          <>Write <code>layer_forward</code>, then <code>forward</code> with its cache</>,
+          <>The check confirms a batch of 7 gives the same answer as 7 single rows</>,
+          <>Measure the activation memory a batch holds, and why it — not the parameters — fills the GPU</>,
+        ]}
+      >
+        Chain the layers into a forward pass, and store what backpropagation will need.
+      </Exercise>
     </Section>
   );
 }

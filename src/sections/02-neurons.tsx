@@ -8,6 +8,7 @@ import { Panel, Note, Stats } from '../components/ui/layout.tsx';
 import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Segmented, Slider, Button } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { DecisionBoundary } from '../components/viz/DecisionBoundary.tsx';
 import { NEGATIVE_COLOR, POSITIVE_COLOR } from '../components/viz/NetworkDiagram.tsx';
 
@@ -465,6 +466,19 @@ export function NeuronsSection({ id, index }: SectionProps) {
           trainable parameter either way.
         </p>
       </Note>
+
+      <Exercise
+        notebook="02-neurons.ipynb"
+        count={3}
+        tasks={[
+          <>Implement <code>neuron</code> and reproduce z = 0.85 from the worked example</>,
+          <>Write <code>signed_distance</code> and confirm ‖w‖ · d equals z</>,
+          <>Sweep 68,921 combinations of (w₁, w₂, b) and find that none solves XOR</>,
+          <>Then verify two hand-chosen hidden units do solve it</>,
+        ]}
+      >
+        One neuron, its geometry, and a brute-force demonstration of what it cannot do.
+      </Exercise>
     </Section>
   );
 }

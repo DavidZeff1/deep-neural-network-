@@ -11,6 +11,7 @@ import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
 import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Button, SelectField, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { fmt, fmtPercent } from '../lib/format.ts';
 
 const TRAIN_COLOR = '#3b82f6';
@@ -609,6 +610,19 @@ export function OverfittingSection({ id, index }: SectionProps) {
           the data term, which is underfitting.
         </p>
       </Note>
+
+      <Exercise
+        notebook="10-overfitting.ipynb"
+        count={3}
+        tasks={[
+          <>Train a 3,400-parameter network on 80 points and watch the validation loss turn upward</>,
+          <>Add the L2 gradient term and find the λ that closes a 0.78 train/validation gap</>,
+          <>Implement inverted dropout, including the rescaling and the evaluation-time behaviour</>,
+          <>Track the best validation epoch and restore it</>,
+        ]}
+      >
+        Produce the overfitting curve, then implement all three standard responses.
+      </Exercise>
     </Section>
   );
 }

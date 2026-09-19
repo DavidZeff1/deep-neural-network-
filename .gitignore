@@ -5,3 +5,9 @@ dist/
 .vite/
 test-output/
 tsconfig.tsbuildinfo
+
+# Python / notebooks
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/

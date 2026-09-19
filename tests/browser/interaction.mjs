@@ -621,6 +621,36 @@ const num = (text) => Number(String(text).replace(/−/g, '-').replace(/[^\d.eE+
   check('12 inspector shows ∂L/∂w for a connection', /∂L\/∂w/.test(edgeInfo), edgeInfo.split('\n').find((l) => l.includes('∂L/∂w')) ?? '');
 }
 
+// --- exercise notebooks -----------------------------------------------------
+{
+  const cards = page.locator('.exercise');
+  const count = await cards.count();
+  check('every section links to its notebook', count === 13, `${count} cards`);
+
+  const files = await page.locator('.exercise__file').allInnerTexts();
+  const expected = [
+    '00-notation', '01-structure', '02-neurons', '03-weights', '04-activations',
+    '05-forward', '06-loss', '07-gradient-descent', '08-backprop', '09-training',
+    '10-overfitting', '11-depth', '12-capstone',
+  ];
+  const matched = expected.every((name, i) => (files[i] ?? '').includes(name));
+  check('notebooks are linked in section order', matched, files.slice(0, 3).join(', '));
+
+  const links = await page.locator('.exercise a').evaluateAll((els) => els.map((e) => e.href));
+  check('each card offers Colab, GitHub and the solution', links.length === 39, `${links.length} links`);
+  check('no link is left as a placeholder',
+    links.every((href) => href.startsWith('https://') && !href.includes('undefined')),
+    links[0]);
+  check('solution links point at the solutions directory',
+    links.filter((href) => href.includes('/solutions/')).length === 13,
+    `${links.filter((h) => h.includes('/solutions/')).length} of 13`);
+
+  // num() would swallow the "e"s in "exercises", so take the leading integer.
+  const totals = await page.locator('.exercise__count').allInnerTexts();
+  const sum = totals.reduce((acc, t) => acc + Number(/^\s*(\d+)/.exec(t)?.[1] ?? 0), 0);
+  check('the advertised exercise count matches the notebooks', sum === 53, `${sum} exercises`);
+}
+
 // --- navigation, theme, responsiveness --------------------------------------
 {
   await page.locator('.navitem', { hasText: 'Loss functions' }).click();

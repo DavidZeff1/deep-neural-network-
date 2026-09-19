@@ -5,6 +5,7 @@ import { Panel, Note, Stats } from '../components/ui/layout.tsx';
 import { Detail, InWords, Notation, Readout } from '../components/ui/Detail.tsx';
 import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { Curve, Marker, Plot, Polyline } from '../components/viz/Plot.tsx';
 import { fmt, sub } from '../lib/format.ts';
 
@@ -1091,6 +1092,20 @@ export function NotationSection({ id, index }: SectionProps) {
           </Note>
         </div>
       </div>
+
+      <Exercise
+        notebook="00-notation.ipynb"
+        count={6}
+        tasks={[
+          <>Implement <code>weighted_sum</code> twice — once as a loop, once with numpy</>,
+          <>Build a matrix–vector product row by row, then compare it to <code>W @ x</code></>,
+          <>Predict four array shapes before running the cell</>,
+          <>Write <code>numerical_derivative</code> and watch its error bottom out near h = 10⁻⁵</>,
+          <>Compute ∂L/∂x through a three-step chain and check it against a direct measurement</>,
+        ]}
+      >
+        Every symbol on this page, written as a few lines of numpy and then verified.
+      </Exercise>
     </Section>
   );
 }

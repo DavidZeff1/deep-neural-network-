@@ -8,6 +8,7 @@ import { Panel, Stats, Note } from '../components/ui/layout.tsx';
 import { Detail, InWords, Notation } from '../components/ui/Detail.tsx';
 import { Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 
 export function StructureSection({ id, index }: SectionProps) {
   const [inputSize, setInputSize] = useState(3);
@@ -343,6 +344,18 @@ export function StructureSection({ id, index }: SectionProps) {
           </Note>
         </div>
       </div>
+
+      <Exercise
+        notebook="01-structure.ipynb"
+        count={4}
+        tasks={[
+          <>Write <code>layer_shapes</code> and <code>count_parameters</code></>,
+          <>Build <code>init_params</code>: random weights, zero biases, one dict per layer</>,
+          <>Estimate the FLOPs of a forward pass and see where the parameters concentrate</>,
+        ]}
+      >
+        Turn a list of layer sizes into shapes, a parameter count, and a ready-to-train network.
+      </Exercise>
     </Section>
   );
 }

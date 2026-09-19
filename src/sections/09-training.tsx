@@ -15,6 +15,7 @@ import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
 import { Detail, InWords, Steps } from '../components/ui/Detail.tsx';
 import { Button, SelectField, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { fmt, fmtPercent } from '../lib/format.ts';
 
 const LOSS_COLOR = '#3b82f6';
@@ -499,6 +500,19 @@ export function TrainingSection({ id, index }: SectionProps) {
           what gets minimised.
         </p>
       </Note>
+
+      <Exercise
+        notebook="09-training.ipynb"
+        count={2}
+        tasks={[
+          <>Write <code>make_batches</code> — shuffled, paired, keeping the short final batch</>,
+          <>Write <code>train</code> and watch the boundary form over 200 epochs</>,
+          <>Measure the gradient noise at five batch sizes and confirm it falls as 1/√B</>,
+          <>Reproduce the linear scaling rule: 8× the batch needs roughly 8× the learning rate</>,
+        ]}
+      >
+        The training loop, then measurements of the two hyperparameters that matter most.
+      </Exercise>
     </Section>
   );
 }

@@ -15,6 +15,7 @@ import { Panel, Note, Stats } from '../components/ui/layout.tsx';
 import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { Curve, Marker, Plot, Polyline } from '../components/viz/Plot.tsx';
 import { ContourField } from '../components/viz/ContourField.tsx';
 import { fmt } from '../lib/format.ts';
@@ -858,6 +859,19 @@ export function GradientDescentSection({ id, index }: SectionProps) {
           difficulty of training deep networks.
         </p>
       </Note>
+
+      <Exercise
+        notebook="07-gradient-descent.ipynb"
+        count={4}
+        tasks={[
+          <>Write <code>gradient_descent</code> and return the whole trajectory</>,
+          <>Search for the largest learning rate that converges, and compare it to 2/c</>,
+          <>Compute a condition number from the Hessian and watch κ rise as a feature is rescaled</>,
+          <>Implement momentum, and find where too much of it starts to hurt</>,
+        ]}
+      >
+        The update rule, its stability limit found by search, and momentum.
+      </Exercise>
     </Section>
   );
 }

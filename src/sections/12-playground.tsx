@@ -16,6 +16,7 @@ import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
 import { Detail } from '../components/ui/Detail.tsx';
 import { Button, Checkbox, SelectField, Segmented, Slider } from '../components/ui/controls.tsx';
 import { M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { fmt, fmtPercent } from '../lib/format.ts';
 
 const TRAIN_COLOR = '#3b82f6';
@@ -609,6 +610,18 @@ export function PlaygroundSection({ id, index }: SectionProps) {
           except through that noise and through the L2 term.
         </p>
       </Note>
+
+      <Exercise
+        notebook="12-capstone.ipynb"
+        count={5}
+        tasks={[
+          <>Implement <code>__init__</code>, <code>forward</code>, <code>loss</code>, <code>gradients</code> and <code>fit</code></>,
+          <>The check gradient-checks every parameter, then trains your network to 92% on circles</>,
+          <>Run it on all five datasets and reproduce the playground’s probe readout</>,
+        ]}
+      >
+        Build the entire library in one class, from an empty file.
+      </Exercise>
     </Section>
   );
 }

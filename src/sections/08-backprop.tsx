@@ -9,6 +9,7 @@ import { Panel, Note, Stats } from '../components/ui/layout.tsx';
 import { Detail, InWords, Steps } from '../components/ui/Detail.tsx';
 import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { fmt, sub } from '../lib/format.ts';
 
 const CONFIG: NetworkConfig = {
@@ -738,6 +739,19 @@ export function BackpropSection({ id, index }: SectionProps) {
           (<code>softmax_cross_entropy_with_logits</code>) rather than composing the two.
         </p>
       </Note>
+
+      <Exercise
+        notebook="08-backprop.ipynb"
+        count={3}
+        tasks={[
+          <>Write <code>output_delta</code> for a sigmoid output with cross-entropy</>,
+          <>Write the full <code>backward</code> pass — the check perturbs all 61 parameters to verify it</>,
+          <>Time backpropagation against finite differences and see the factor it saves</>,
+          <>Measure the gradient reaching layer 1 of a 10-layer sigmoid network</>,
+        ]}
+      >
+        Backpropagation, verified parameter by parameter against finite differences.
+      </Exercise>
     </Section>
   );
 }

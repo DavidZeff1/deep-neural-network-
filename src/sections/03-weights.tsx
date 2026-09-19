@@ -14,6 +14,7 @@ import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
 import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Button, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { fmt } from '../lib/format.ts';
 
 const CONFIG: NetworkConfig = {
@@ -767,6 +768,18 @@ export function WeightsSection({ id, index }: SectionProps) {
           hypothetical one.
         </p>
       </Note>
+
+      <Exercise
+        notebook="03-weights.ipynb"
+        count={3}
+        tasks={[
+          <>Give two units identical weights, take one gradient step, watch them stay identical</>,
+          <>Implement <code>he_init</code> and <code>glorot_init</code>; the check measures their spread</>,
+          <>Write <code>layer_stds</code> and reproduce the flat / vanishing / exploding curves over 10 layers</>,
+        ]}
+      >
+        Demonstrate the symmetry problem, then derive and measure the initialisation scale.
+      </Exercise>
     </Section>
   );
 }

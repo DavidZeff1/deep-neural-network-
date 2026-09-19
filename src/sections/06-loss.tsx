@@ -8,6 +8,7 @@ import { Panel, Note, Stats, Legend } from '../components/ui/layout.tsx';
 import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Segmented, Slider, Button } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { Curve, Marker, Plot } from '../components/viz/Plot.tsx';
 import { fmt } from '../lib/format.ts';
 
@@ -590,6 +591,19 @@ export function LossSection({ id, index }: SectionProps) {
           perplexity of <M>{'K'}</M> is no information at all.
         </p>
       </Note>
+
+      <Exercise
+        notebook="06-loss.ipynb"
+        count={6}
+        tasks={[
+          <>Implement <code>mse</code> and <code>bce</code>, handling log(0)</>,
+          <>Write both gradients; the check measures them against your own loss</>,
+          <>Derive ∂L/∂z = ŷ − y for sigmoid + cross-entropy and confirm it numerically</>,
+          <>Reproduce cross-entropy as a negative log-likelihood, to six decimal places</>,
+        ]}
+      >
+        Three losses, their gradients, and the cancellation that makes cross-entropy work.
+      </Exercise>
     </Section>
   );
 }

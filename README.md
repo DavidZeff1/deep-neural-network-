@@ -13,6 +13,12 @@ of every equation, and the full derivation in a collapsible block, so nothing is
 asserted without proof and the page still reads as a sequence of experiments
 rather than a textbook.
 
+Each section also links to a **Jupyter notebook** that makes you build the thing
+it just showed you. Thirteen notebooks, 53 exercises, plain numpy — see
+[`notebooks/`](notebooks/README.md). The site teaches by manipulation; the
+notebooks teach by implementation, and by the end of them you will have written
+a working neural network library from an empty file.
+
 ![Twelve sections, from network structure to a full playground](docs/overview.png)
 
 ## Contents
@@ -44,11 +50,21 @@ npm run preview      # serve the production build on :4173
 
 The built site is static and has no network dependencies at runtime.
 
+The notebooks are separate and need only Python:
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r notebooks/requirements.txt jupyterlab
+jupyter lab notebooks/
+```
+
 ## Tests
 
 ```bash
-npm test             # numerical correctness of the network engine — 24 tests
-npm run test:browser # every interactive control — 97 checks, needs a preview server
+npm test               # numerical correctness of the network engine — 24 tests
+npm run test:browser   # every interactive control — 103 checks, needs a preview server
+npm run notebooks:check # the committed notebooks match notebooks/src
+python tools/run_notebooks.py  # execute all 13 solution notebooks
 ```
 
 `npm test` is the important one. It gradient-checks backpropagation against
@@ -62,7 +78,7 @@ without changing the fit, dataset balance and reproducibility, and that a networ
 with no hidden layer fails on XOR while solving a linearly separable set.
 
 `npm run test:browser` needs a preview server on port 4173 and Playwright's
-Chromium. It drives 97 checks across all thirteen sections — sliders, buttons,
+Chromium. It drives 103 checks across all thirteen sections — sliders, buttons,
 selects, canvas clicks, training runs, navigation, theme switching and mobile
 layout — and asserts on the values the page displays: that `BCE(0.8, y=1)` reads
 `0.2231`, that one descent step equals `θ − η∇L`, that the on-screen chain-rule
@@ -74,6 +90,10 @@ total must equal the sum of its terms, the matrix-vector product must be
 [0, 9, 1], shrinking the nudge must bring rise ÷ run within 0.001 of the exact
 derivative, and the chain-rule product must match a direct measurement. Set
 `CHROMIUM_PATH` to use a system Chromium instead of a downloaded one.
+
+`tools/run_notebooks.py` executes every solution notebook top to bottom and
+fails if any cell raises — which includes all 53 `check.*` calls inside them. It
+is what proves the exercises are solvable as written.
 
 ## Layout
 
@@ -98,6 +118,14 @@ src/
 tests/
   network.test.ts      numerical tests
   browser/             end-to-end interaction tests
+notebooks/
+  src/                 the notebooks' source of truth (percent format)
+  *.ipynb              generated student notebooks, solutions removed
+  solutions/*.ipynb    generated solution notebooks, executed in CI
+  dnn/                 datasets, plotting, checks, and a reference MLP
+tools/
+  build_notebooks.py   src/*.py -> student and solution notebooks
+  run_notebooks.py     execute the solutions, fail on any error
 ```
 
 `src/lib` is plain TypeScript with no React imports, so the engine can be read,

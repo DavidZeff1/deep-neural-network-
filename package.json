@@ -10,7 +10,10 @@
     "preview": "vite preview --port 4173",
     "typecheck": "tsc -b",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
-    "test:browser": "node tests/browser/interaction.mjs"
+    "test:browser": "node tests/browser/interaction.mjs",
+    "notebooks:build": "python3 tools/build_notebooks.py",
+    "notebooks:check": "python3 tools/build_notebooks.py --check",
+    "notebooks:run": "python3 tools/run_notebooks.py"
   },
   "dependencies": {
     "d3-scale": "^4.0.2",

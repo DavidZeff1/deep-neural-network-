@@ -14,6 +14,7 @@ import { Panel, Note, Stats } from '../components/ui/layout.tsx';
 import { Detail, InWords } from '../components/ui/Detail.tsx';
 import { Button, SelectField, Segmented, Slider } from '../components/ui/controls.tsx';
 import { Equation, M } from '../components/ui/Math.tsx';
+import { Exercise } from '../components/ui/Exercise.tsx';
 import { fmt, fmtPercent } from '../lib/format.ts';
 
 const SERIES_COLORS = ['#94a3b8', '#e0761f', '#3b82f6', '#16a34a'];
@@ -461,6 +462,19 @@ export function DepthSection({ id, index }: SectionProps) {
           epochs for the same fit — not about possibility.
         </p>
       </Note>
+
+      <Exercise
+        notebook="11-depth.ipynb"
+        count={2}
+        tasks={[
+          <>Train 0, 1, 2 and 3 hidden layers on the spiral at a matched budget</>,
+          <>Implement the region-counting formulas and see the count grow exponentially in depth</>,
+          <>Plot every hidden unit’s response and watch layer 2 bend what layer 1 drew straight</>,
+          <>Repeat with sigmoid and find the depth advantage reversed</>,
+        ]}
+      >
+        Train four depths side by side, then count what each architecture can represent.
+      </Exercise>
     </Section>
   );
 }
